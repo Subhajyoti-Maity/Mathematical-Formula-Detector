@@ -1,10 +1,15 @@
-# MATH FORMULA DETECTOR
+# Mathematical Formula Detector
+
+[![GitHub Repository](https://img.shields.io/badge/GitHub-Repository-blue?logo=github)](https://github.com/Subhajyoti-Maity/Mathematical-Formula-Detector)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 A comprehensive machine learning application for detecting, recognizing, and extracting mathematical formulas from documents (PDF, images). The system uses deep learning models for detection and recognition, combined with OCR for text extraction and LaTeX formatting.
 
+🔗 **Repository**: [https://github.com/Subhajyoti-Maity/Mathematical-Formula-Detector](https://github.com/Subhajyoti-Maity/Mathematical-Formula-Detector)
+
 ##  Overview
 
-**MATH FORMULA DETECTOR** is an intelligent end-to-end solution for automated mathematical formula extraction from digital and scanned documents. It leverages state-of-the-art deep learning models (YOLOv8 for detection and Transformer architecture for recognition) to accurately identify and convert mathematical formulas into LaTeX format.
+**Mathematical Formula Detector** is an intelligent end-to-end solution for automated mathematical formula extraction from digital and scanned documents. It leverages state-of-the-art deep learning models (YOLOv8 for detection and Transformer architecture for recognition) to accurately identify and convert mathematical formulas into LaTeX format.
 
 The system achieves **94.0% F1-Score on formula detection** and **88.5% accuracy on LaTeX generation**, making it highly reliable for:
 - Academic document digitization
@@ -21,7 +26,7 @@ With an **interactive Web UI** powered by Streamlit, it provides a user-friendly
 
 ```bash
 # Navigate to project directory
-cd MATH-FORMULA-DETECTOR
+cd Mathematical-Formula-Detector
 
 # Activate virtual environment (if using one)
 source .venv/bin/activate  # macOS/Linux
@@ -41,7 +46,25 @@ Then:
 
 **First time setup?** Follow the complete [Installation & Setup](#-installation--setup) guide below.
 
-## 🎯 Features
+## 📹 Democlips
+
+### Application Workflow
+
+See Mathematical Formula Detector in action with these key features:
+
+#### 1️⃣ Formula Detection
+![Formula Detection](screenshots/Formula-Detection.png)
+*Automatic detection of mathematical formulas with bounding boxes*
+
+#### 2️⃣ View Extracted Formulas
+![View Extracted Formulas](screenshots/View-Extracted-Formulas.png)
+*Browse and view detected formulas with rendered LaTeX directly in the browser*
+
+#### 3️⃣ Extract Formulas to File
+![Extract Formulas to File](screenshots/Extract%20-Formula-to-file.png)
+*Download formulas as PDF report and ZIP archive for offline use*
+
+## �🎯 Features
 
 ### Core Capabilities
 - **Mathematical Formula Detection**: Locates mathematical formulas in images and documents using YOLOv8-based detection models
@@ -200,11 +223,11 @@ fpdf==1.7.2
 
 ### Step 1: Clone the Repository
 ```bash
-git clone <repository-url>
-cd MATH-FORMULA-DETECTOR
+git clone https://github.com/Subhajyoti-Maity/Mathematical-Formula-Detector.git
+cd Mathematical-Formula-Detector
 ```
 
-**Alternative**: Download the ZIP file from the repository and extract it to your desired location.
+**Alternative**: Download the ZIP file from the [GitHub repository](https://github.com/Subhajyoti-Maity/Mathematical-Formula-Detector) and extract it to your desired location.
 
 ### Step 2: Create a Virtual Environment (Recommended)
 ```bash
@@ -891,8 +914,8 @@ Contributions are welcome! Here's how you can help:
 
 ```bash
 # Fork and clone the repository
-git clone https://github.com/your-username/MATH-FORMULA-DETECTOR.git
-cd MATH-FORMULA-DETECTOR
+git clone https://github.com/your-username/Mathematical-Formula-Detector.git
+cd Mathematical-Formula-Detector
 
 # Create a new branch for your feature
 git checkout -b feature/your-feature-name
@@ -927,4 +950,10 @@ git push origin feature/your-feature-name
 
 ## 📧 Support
 
-For issues and questions, please open an issue on the GitHub repository.
+For issues and questions, please open an issue on the [GitHub repository](https://github.com/Subhajyoti-Maity/Mathematical-Formula-Detector/issues).
+
+## 🔗 Links
+
+- **Repository**: [https://github.com/Subhajyoti-Maity/Mathematical-Formula-Detector](https://github.com/Subhajyoti-Maity/Mathematical-Formula-Detector)
+- **Issues**: [https://github.com/Subhajyoti-Maity/Mathematical-Formula-Detector/issues](https://github.com/Subhajyoti-Maity/Mathematical-Formula-Detector/issues)
+- **Pull Requests**: [https://github.com/Subhajyoti-Maity/Mathematical-Formula-Detector/pulls](https://github.com/Subhajyoti-Maity/Mathematical-Formula-Detector/pulls)
