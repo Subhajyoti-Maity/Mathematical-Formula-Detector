@@ -150,9 +150,6 @@ kernel.spec
 ._*
 
 # Project specific
-screenshots/*.png
-screenshots/*.jpg
-screenshots/*.jpeg
 *.pkl
 *.pickle
 *.npy
