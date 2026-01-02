@@ -70,7 +70,7 @@ See Mathematical Formula Detector in action with these key features:
 - **Mathematical Formula Detection**: Locates mathematical formulas in images and documents using YOLOv8-based detection models
 - **Formula Recognition**: Converts detected formulas to LaTeX using deep learning models
 - **PDF Processing**: Extract formulas from PDF documents with page-by-page navigation
-- **Image Processing**: Handle various image formats (PNG, JPG, JPEG, BMP, TIFF)
+- **Image Processing**: Handle various image formats (PNG, JPG, JPEG)
 - **OCR Integration**: Text extraction using Tesseract OCR for fallback
 - **LaTeX Correction**: Automatic LaTeX normalization and error correction
 
@@ -189,7 +189,7 @@ Models are saved to `Models/` folder. No internet required after initial downloa
 - Streamlit 1.52.2
 - Tesseract OCR
 
-### � Python Dependencies
+### 📦 Python Dependencies
 
 ```
 numpy==2.2.6
@@ -374,7 +374,7 @@ python -c "import cv2; print(f'OpenCV version: {cv2.__version__}')"
 
 **Step 1: Navigate to the project directory**
 ```bash
-cd MATH-FORMULA-DETECTOR
+cd Mathematical-Formula-Detector
 ```
 
 **Step 2: Activate virtual environment** (if using one)
@@ -419,7 +419,7 @@ The Streamlit interface is divided into the following sections:
 #### 2. **Main Upload Area**
    - **Supported File Formats**:
      - PDF files (`.pdf`) - process page-by-page
-     - Image files (`.png`, `.jpg`, `.jpeg`, `.bmp`, `.tiff`)
+     - Image files (`.png`, `.jpg`, `.jpeg`)
    - **Drag & Drop**: Click or drag file to upload
    - **Single File Processing**: One document/page at a time
 
@@ -442,7 +442,6 @@ The Streamlit interface is divided into the following sections:
    - **📦 ZIP Archive**: Download structured archive containing:
      - Individual formula images (PNG)
      - LaTeX code for each formula (TXT)
-     - Summary CSV with coordinates and confidence scores
 
 ---
 
@@ -513,7 +512,7 @@ The Streamlit interface is divided into the following sections:
 ## 📁 Project Structure
 
 ```
-MATH-FORMULA-DETECTOR/
+Mathematical-Formula-Detector/
 ├── app.py                          # Main Streamlit application
 ├── Inference_Math_Detection.py     # Math detection inference module
 ├── Recog_MathForm.py              # Formula recognition module
@@ -567,7 +566,7 @@ The project includes optional support for ICDAR datasets (for research and train
   - Extract ICDAR 2021 to `ICDAR2021/labels/`
 - **Kaggle Dataset**: Visit [https://www.kaggle.com/ro101010/math-formula-detection](https://www.kaggle.com/ro101010/math-formula-detection)
 
-## ⚙️ Core Modules
+## 🔧 Core Modules
 
 ### `app.py`
 Main Streamlit application providing the web interface for:
@@ -915,23 +914,78 @@ Contributions are welcome! Here's how you can help:
 
 ### 💻 Development Setup
 
+**Step 1: Fork the Repository**
+1. Visit [https://github.com/Subhajyoti-Maity/Mathematical-Formula-Detector](https://github.com/Subhajyoti-Maity/Mathematical-Formula-Detector)
+2. Click the "Fork" button in the top-right corner
+3. This creates a copy of the repository in your GitHub account
+
+**Step 2: Clone Your Fork**
 ```bash
-# Fork and clone the repository
+# Replace 'your-username' with your actual GitHub username
 git clone https://github.com/your-username/Mathematical-Formula-Detector.git
 cd Mathematical-Formula-Detector
+```
 
-# Create a new branch for your feature
+**Step 3: Add Upstream Remote**
+```bash
+# Add the original repository as upstream to sync with latest changes
+git remote add upstream https://github.com/Subhajyoti-Maity/Mathematical-Formula-Detector.git
+
+# Verify remotes
+git remote -v
+```
+
+**Step 4: Create a Feature Branch**
+```bash
+# Create and switch to a new branch for your feature
 git checkout -b feature/your-feature-name
 
-# Make your changes and test thoroughly
-# ...
+# Examples:
+# git checkout -b feature/improve-accuracy
+# git checkout -b fix/tesseract-path-issue
+# git checkout -b docs/update-installation-guide
+```
 
-# Commit and push
+**Step 5: Make Your Changes**
+- Write your code and test thoroughly
+- Follow existing code style and conventions
+- Add comments where necessary
+- Update documentation if needed
+
+**Step 6: Commit and Push**
+```bash
+# Stage your changes
 git add .
-git commit -m "Add: your feature description"
-git push origin feature/your-feature-name
 
-# Open a pull request on GitHub
+# Commit with a descriptive message
+git commit -m "Add: your feature description"
+
+# Push to your fork
+git push origin feature/your-feature-name
+```
+
+**Step 7: Create Pull Request**
+1. Go to your fork on GitHub
+2. Click "Compare & pull request" button
+3. Fill in the PR template with:
+   - Clear description of changes
+   - Related issue numbers (if any)
+   - Screenshots (if UI changes)
+4. Submit the pull request
+
+**Step 8: Keep Your Fork Updated**
+```bash
+# Fetch latest changes from upstream
+git fetch upstream
+
+# Switch to main branch
+git checkout main
+
+# Merge upstream changes
+git merge upstream/main
+
+# Push updates to your fork
+git push origin main
 ```
 
 ### 📝 Contribution Guidelines
