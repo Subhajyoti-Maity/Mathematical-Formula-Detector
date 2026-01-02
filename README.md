@@ -212,7 +212,7 @@ streamlit==1.52.2
 fpdf==1.7.2
 ```
 
-## 📦 Installation & Setup
+## 🛠️ Installation & Setup
 
 ### ✔️ Prerequisites
 - Python 3.8 or higher
