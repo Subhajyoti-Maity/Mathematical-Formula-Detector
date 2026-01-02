@@ -1,0 +1,175 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+.pytest_cache/
+.coverage
+htmlcov/
+*.pyc
+
+# Virtual Environment
+.venv/
+.venv310/
+venv/
+ENV/
+env/
+.virtualenv/
+
+# IDE & Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+*.ipynb
+
+# Models (large files - should be downloaded separately)
+Models/*.pth
+Models/*.ts
+Models/*.pt
+Models/*.onnx
+Models/*.bin
+
+# Keep config files and tokenizer
+!Models/config.yaml
+!Models/tokenizer.json
+
+# Output directories
+extracted_output_*/
+output/
+results/
+temp/
+temp_*
+
+# Image datasets (can be large)
+ICDAR2019/images/
+ICDAR2021/images/
+
+# Keep label directories but exclude label files
+ICDAR2019/labels/*.txt
+ICDAR2021/labels/*.txt
+!ICDAR2019/labels/.gitkeep
+!ICDAR2021/labels/.gitkeep
+
+# Streamlit configuration
+.streamlit/secrets.toml
+.streamlit/config.toml
+.streamlit/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
+debug.log
+
+# OS & System
+Thumbs.db
+.DS_Store
+desktop.ini
+*.lnk
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*~
+temp_*
+*.cache
+
+# Compressed files
+*.zip
+*.tar.gz
+*.tar.bz2
+*.rar
+*.7z
+
+# Docker
+.dockerignore
+Dockerfile
+
+# Cache directories
+.cache/
+*.cache
+
+# Testing
+.coverage/
+.pytest_cache/
+htmlcov/
+coverage.xml
+
+# IDE specific
+.vscode/settings.json
+.vscode/launch.json
+.vscode/extensions.json
+# Python type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+
+# Python package files
+pip-log.txt
+pip-delete-this-directory.txt
+*.pyc
+
+# Generated files from project
+*.egg-info/
+.eggs/
+*.whl
+
+# Training & Model artifacts
+checkpoints/
+runs/
+wandb/
+lightning_logs/
+
+# Jupyter Notebook kernels
+kernel.json
+kernel.spec
+
+# macOS specific
+.AppleDouble
+.LSOverride
+._*
+
+# Project specific
+screenshots/*.png
+screenshots/*.jpg
+screenshots/*.jpeg
+*.pkl
+*.pickle
+*.npy
+*.npz
+
+# Testing framework
+.hypothesis/
+.tox/
+
+# Local development
+local_settings.py
+instance/
+.webassets-cache/
+
+# Crawler & Scraper
+.scrapy/
+
+# Generated documentation
+docs/_build/
+site/
