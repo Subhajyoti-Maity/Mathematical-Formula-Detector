@@ -7,7 +7,7 @@ A comprehensive machine learning application for detecting, recognizing, and ext
 
 🔗 **Repository**: [https://github.com/Subhajyoti-Maity/Mathematical-Formula-Detector](https://github.com/Subhajyoti-Maity/Mathematical-Formula-Detector)
 
-##  Overview
+## 📋 Overview
 
 **Mathematical Formula Detector** is an intelligent end-to-end solution for automated mathematical formula extraction from digital and scanned documents. It leverages state-of-the-art deep learning models (YOLOv8 for detection and Transformer architecture for recognition) to accurately identify and convert mathematical formulas into LaTeX format.
 
