@@ -48,7 +48,7 @@ Then:
 
 ## 📹 Democlips
 
-### Application Workflow
+### 🎬 Application Workflow
 
 See Mathematical Formula Detector in action with these key features:
 
@@ -64,9 +64,9 @@ See Mathematical Formula Detector in action with these key features:
 ![Extract Formulas to File](screenshots/Extract%20-Formula-to-file.png)
 *Download formulas as PDF report and ZIP archive for offline use*
 
-## �🎯 Features
+## ✨ Features
 
-### Core Capabilities
+### 🔍 Core Capabilities
 - **Mathematical Formula Detection**: Locates mathematical formulas in images and documents using YOLOv8-based detection models
 - **Formula Recognition**: Converts detected formulas to LaTeX using deep learning models
 - **PDF Processing**: Extract formulas from PDF documents with page-by-page navigation
@@ -74,21 +74,21 @@ See Mathematical Formula Detector in action with these key features:
 - **OCR Integration**: Text extraction using Tesseract OCR for fallback
 - **LaTeX Correction**: Automatic LaTeX normalization and error correction
 
-### Output Modes
+### 💾 Output Modes
 - **View Mode**: Browse formulas inline with LaTeX rendering (no download required)
 - **Extract Mode**: Save formulas to PDF report and ZIP archive for download
 
-### User Interface
+### 🖥️ User Interface
 - **Interactive Web UI**: User-friendly Streamlit interface with real-time preview
 - **Drag & Drop Upload**: Easy file upload for PDF and image files
 - **Page Navigation**: Process multi-page PDFs one page at a time
 - **Result Caching**: Instant switching between View/Extract modes after first processing
 
-## 🧠 Model Architecture & Sizes
+## ⚙️ Model Architecture & Sizes
 
 This project uses multiple deep learning models working together in a recognition pipeline. Here's the breakdown:
 
-### Model Components
+### 🤖 Model Components
 
 | Model | Type | Size | Purpose | When Used |
 |-------|------|------|---------|-----------|
@@ -100,7 +100,7 @@ This project uses multiple deep learning models working together in a recognitio
 
 **Note:** pix2tex is an optional enhancement. If installed separately (`pip install pix2tex`), it may be used as an alternative recognition method for improved accuracy on certain formula types.
 
-### Model File Formats
+### 🗃️ Model File Formats
 
 | Model Name | File Format | What It Is |
 |------------|-------------|-----------|
@@ -116,7 +116,7 @@ This project uses multiple deep learning models working together in a recognitio
 - `.json (JSON)`: Text-based configuration and vocabulary mapping files
 - Both PyTorch formats work seamlessly with PyTorch—the framework handles them automatically
 
-### Recognition Pipeline
+### ⛓️ Recognition Pipeline
 
 ```
 Input Image
@@ -134,7 +134,7 @@ Output LaTeX → correct_latex() normalization → Final result
 
 **Recognition Strategy:** The system primarily uses MathRecog.pth. If pix2tex is installed (`pip install pix2tex`), it can serve as an optional fallback for enhanced recognition of complex or handwritten formulas.
 
-### Memory Requirements
+### 🖥️ Memory Requirements
 
 | Scenario | RAM | VRAM (GPU) | Notes |
 |----------|-----|-----------|-------|
@@ -143,7 +143,7 @@ Output LaTeX → correct_latex() normalization → Final result
 | All models (including fallbacks) | 6-8 GB | 4-5 GB | All models + LatexOCR (Optional) |
 | Recommended system | 8+ GB | 4+ GB | Smooth operation |
 
-### Model Details
+### 📖 Model Details
 
 **MathDetector.ts** (Detection)
 - YOLOv8-based formula detection
@@ -171,7 +171,7 @@ Output LaTeX → correct_latex() normalization → Final result
 - Fast and reliable for simple text/formula extraction
 - Installed as system dependency (not included in `requirements.txt`)
 
-### Model Downloads
+### ☁️ Model Downloads
 
 **Required Models:**
 - **MathDetector.ts** (27.46 MB) - Auto-downloaded on first run
@@ -181,7 +181,7 @@ Output LaTeX → correct_latex() normalization → Final result
 
 Models are saved to `Models/` folder. No internet required after initial download.
 
-## 📋 Requirements
+## ✅ Requirements
 
 - Python 3.8 or higher
 - PyTorch 2.9.1
@@ -189,7 +189,7 @@ Models are saved to `Models/` folder. No internet required after initial downloa
 - Streamlit 1.52.2
 - Tesseract OCR
 
-### Python Dependencies
+### � Python Dependencies
 
 ```
 numpy==2.2.6
@@ -214,14 +214,14 @@ fpdf==1.7.2
 
 ## 📦 Installation & Setup
 
-### Prerequisites
+### ✔️ Prerequisites
 - Python 3.8 or higher
 - pip (Python package manager)
 - Git (for cloning the repository)
 - 2GB minimum disk space (for models)
 - 4GB RAM (8GB recommended for GPU processing)
 
-### Step 1: Clone the Repository
+### 1️⃣ Step 1: Clone the Repository
 ```bash
 git clone https://github.com/Subhajyoti-Maity/Mathematical-Formula-Detector.git
 cd Mathematical-Formula-Detector
@@ -229,7 +229,7 @@ cd Mathematical-Formula-Detector
 
 **Alternative**: Download the ZIP file from the [GitHub repository](https://github.com/Subhajyoti-Maity/Mathematical-Formula-Detector) and extract it to your desired location.
 
-### Step 2: Create a Virtual Environment (Recommended)
+### 2️⃣ Step 2: Create a Virtual Environment (Recommended)
 ```bash
 # On Windows (Command Prompt)
 python -m venv .venv
@@ -251,7 +251,7 @@ This isolates your project dependencies and prevents conflicts with other Python
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ```
 
-### Step 3: Install Python Dependencies
+### 3️⃣ Step 3: Install Python Dependencies
 ```bash
 pip install --upgrade pip
 pip install -r requirements.txt
@@ -267,9 +267,9 @@ This will install all required packages including:
 
 **Installation time**: Typically 5-15 minutes depending on your internet speed and system performance.
 
-### Step 4: Install System Dependencies
+### 4️⃣ Step 4: Install System Dependencies
 
-#### On Windows:
+#### 🪟 On Windows:
 1. **Tesseract OCR** (Required for text extraction)
    - Download the installer from: https://github.com/UB-Mannheim/tesseract/wiki
    - Run the installer (recommended path: `C:\Program Files\Tesseract-OCR\`)
@@ -290,7 +290,7 @@ This will install all required packages including:
      ```
    - **Verification**: Run `pdfinfo --version` in Command Prompt
 
-#### On macOS:
+#### 🍎 On macOS:
 ```bash
 # Using Homebrew
 brew install tesseract
@@ -301,7 +301,7 @@ If Homebrew is not installed, download from https://brew.sh/
 
 **Important**: After installation, comment out line 15 in `app.py` (the Windows-specific Tesseract path), as macOS will use the system PATH.
 
-#### On Linux:
+#### 🐧 On Linux:
 ```bash
 # Ubuntu/Debian
 sudo apt-get update
@@ -316,7 +316,7 @@ sudo dnf install poppler-utils
 
 **Important**: After installation, comment out line 15 in `app.py` (the Windows-specific Tesseract path), as Linux will use the system PATH.
 
-### Step 5: Download Pre-trained Models
+### 5️⃣ Step 5: Download Pre-trained Models
 The models are automatically downloaded when you first run the application if they're missing. However, you can manually place them in the `Models/` directory:
 
 ```
@@ -343,7 +343,7 @@ gdown https://drive.google.com/uc?id=1AGZTIRbx-KmLQ7bSEAcxUWWtdSrYucFz -O Models
 gdown https://drive.google.com/uc?id=1oR7eNBOC_3TBhFQ1KTzuWSl7-fet4cYh -O Models/MathRecog.pth
 ```
 
-### Step 6: Verify Installation
+### 6️⃣ Step 6: Verify Installation
 ```bash
 # Test Python version
 python --version
@@ -370,7 +370,7 @@ python -c "import cv2; print(f'OpenCV version: {cv2.__version__}')"
 
 **Note**: GPU acceleration is supported but optional. PyTorch will automatically use CUDA if available. The application works on CPU with slightly slower processing.
 
-### Running the Streamlit Web Application
+### ▶️ Running the Streamlit Web Application
 
 **Step 1: Navigate to the project directory**
 ```bash
@@ -407,7 +407,7 @@ If it doesn't open automatically, manually visit: `http://localhost:8501/`
 
 ---
 
-### Web Application Interface Guide
+### 🎨 Web Application Interface Guide
 
 The Streamlit interface is divided into the following sections:
 
@@ -446,7 +446,7 @@ The Streamlit interface is divided into the following sections:
 
 ---
 
-### Complete Workflow Example
+### 📝 Complete Workflow Example
 
 **1. Upload a Document**
    - Click the upload area or drag a file
@@ -478,7 +478,7 @@ The Streamlit interface is divided into the following sections:
 
 ---
 
-### Performance Tips
+### ⚡ Performance Tips
 
 1. **For Faster Processing**:
    - GPU acceleration is automatic if CUDA is available
@@ -498,7 +498,7 @@ The Streamlit interface is divided into the following sections:
 
 ---
 
-### Troubleshooting During Usage
+### 🔧 Troubleshooting During Usage
 
 | Issue | Solution |
 |-------|----------|
@@ -542,7 +542,7 @@ MATH-FORMULA-DETECTOR/
         └── validation/            # Validation label files
 ```
 
-### Directory Details
+### 📂 Directory Details
 
 | Directory | Size | Purpose | Required |
 |-----------|------|---------|----------|
@@ -556,15 +556,18 @@ The project includes optional support for ICDAR datasets (for research and train
 
 - **ICDAR 2019**: Math formula detection and recognition dataset labels (~0.38 MB)
 - **ICDAR 2021**: Extended dataset with additional formula variations (~3.2 MB)
+- **Kaggle Dataset**: Math Formula Detection dataset for additional training data
+  - 🔗 [https://www.kaggle.com/ro101010/math-formula-detection](https://www.kaggle.com/ro101010/math-formula-detection)
 
 **Note**: Datasets are **optional** and only needed if you plan to train/fine-tune models. The pre-trained models work out-of-the-box for inference.
 
 **Download datasets manually:**
-- Visit https://www.icdar.org/ (register for access)
-- Extract ICDAR 2019 to `ICDAR2019/labels/`
-- Extract ICDAR 2021 to `ICDAR2021/labels/`
+- **ICDAR Datasets**: Visit https://www.icdar.org/ (register for access)
+  - Extract ICDAR 2019 to `ICDAR2019/labels/`
+  - Extract ICDAR 2021 to `ICDAR2021/labels/`
+- **Kaggle Dataset**: Visit [https://www.kaggle.com/ro101010/math-formula-detection](https://www.kaggle.com/ro101010/math-formula-detection)
 
-## 🔧 Core Modules
+## ⚙️ Core Modules
 
 ### `app.py`
 Main Streamlit application providing the web interface for:
@@ -760,7 +763,7 @@ The models are trained and evaluated on ICDAR 2019 and 2021 datasets, achieving 
 - LaTeX generation accuracy: **88.5% Exact Match**
 - End-to-end recognition: **85.2% Overall Accuracy**
 
-### Model Accuracy Metrics
+### 📊 Model Accuracy Metrics
 
 #### Detection Stage (YOLOv8) Performance
 Evaluated on ICDAR 2019 and 2021 test sets:
@@ -795,9 +798,9 @@ Complete pipeline evaluation:
 | **Correct LaTeX Generation Rate** | 88.5% |
 | **Overall System Accuracy** | 82.4% |
 
-### Current Project Performance
+### 🚀 Current Project Performance
 
-#### Inference Speed
+#### ⏱️ Inference Speed
 
 | Device | Detection | Recognition | Total | Pages/Hour |
 |--------|-----------|-------------|-------|-----------|
@@ -805,7 +808,7 @@ Complete pipeline evaluation:
 | **GPU (RTX 2080 Ti)** | 45ms | 120ms | 165ms | ~22 pages |
 | **GPU (RTX 3090)** | 32ms | 85ms | 117ms | ~31 pages |
 
-#### Memory Usage
+#### 💾 Memory Usage
 
 | Component | CPU | GPU (8GB) | GPU (10GB) |
 |-----------|-----|----------|-----------|
@@ -814,7 +817,7 @@ Complete pipeline evaluation:
 | **Inference Buffer** | 200MB | 500MB | 500MB |
 | **Total Required** | 1.0GB | 3.5GB | 3.5GB |
 
-#### Processing Performance
+#### 📈 Processing Performance
 
 **Single Formula Processing:**
 
@@ -830,7 +833,7 @@ Complete pipeline evaluation:
 
 **Note**: The app processes one page at a time. Results are cached, so switching between View/Extract modes is instant after first processing.
 
-#### Dataset Performance Breakdown
+#### 📉 Dataset Performance Breakdown
 
 **By Document Type**:
 - PDF Documents: 86.3% accuracy
@@ -851,7 +854,7 @@ Complete pipeline evaluation:
 - Matrix/Array: 82.4% accuracy
 - Chemical Equations: 79.8% accuracy
 
-### Performance Optimizations
+### ⚙️ Performance Optimizations
 
 **Current Optimizations**:
 - ✅ Model quantization for faster inference
@@ -867,7 +870,7 @@ Complete pipeline evaluation:
 - 🔄 Batch processing for multiple formulas
 - 🔄 Cloud deployment optimization
 
-### Quality Metrics
+### ✅ Quality Metrics
 
 **Output Quality**:
 - Valid LaTeX generation: 96.8%
@@ -883,19 +886,19 @@ Complete pipeline evaluation:
 
 ## 🐛 Troubleshooting
 
-### Tesseract Not Found
+### 🔍 Tesseract Not Found
 - Ensure Tesseract is installed and the path in `app.py` is correct
 - Download from: https://github.com/UB-Mannheim/tesseract/wiki
 
-### GPU/CUDA Issues
+### 🎮 GPU/CUDA Issues
 - Ensure PyTorch is installed with CUDA support if using GPU
 - Check torch version compatibility: `pip install torch torchvision`
 
-### Model Loading Errors
+### ⚠️ Model Loading Errors
 - Verify all model files exist in `Models/` directory
 - Check `config.yaml` for correct model paths
 
-##  License
+## 📜 License
 
 This project builds upon the ICDAR dataset and academic research in formula detection.
 
@@ -903,14 +906,14 @@ This project builds upon the ICDAR dataset and academic research in formula dete
 
 Contributions are welcome! Here's how you can help:
 
-### Ways to Contribute
+### 🎁 Ways to Contribute
 
 1. **Report Bugs**: Found a bug? Open an issue with detailed reproduction steps
 2. **Suggest Features**: Have ideas for improvements? Share them in the issues section
 3. **Improve Documentation**: Fix typos, clarify instructions, or add examples
 4. **Submit Code**: Fork the repo, make changes, and submit a pull request
 
-### Development Setup
+### 💻 Development Setup
 
 ```bash
 # Fork and clone the repository
@@ -931,7 +934,7 @@ git push origin feature/your-feature-name
 # Open a pull request on GitHub
 ```
 
-### Contribution Guidelines
+### 📝 Contribution Guidelines
 
 - Follow existing code style and conventions
 - Test your changes thoroughly before submitting
@@ -939,7 +942,7 @@ git push origin feature/your-feature-name
 - Write clear commit messages
 - One feature/fix per pull request
 
-### Areas for Improvement
+### 🚀 Areas for Improvement
 
 - Model optimization (quantization, distillation)
 - Support for additional output formats
