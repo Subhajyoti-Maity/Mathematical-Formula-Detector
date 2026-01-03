@@ -44,8 +44,6 @@ Then:
    - "View Extracted Formulas" - Quick inline preview
    - "Extract Formulas to File" - Download PDF/ZIP
 
-**First time setup?** Follow the complete [Installation & Setup](#-installation--setup) guide below.
-
 ## 📹 Democlips
 
 ### 🎬 Application Workflow
