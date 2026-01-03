@@ -49,15 +49,15 @@ Then:
 Here are some democlips showing the Mathematical Formula Detector in action:
 
 #### 1️⃣ Formula Detection
-![Formula Detection](screenshots/Formula-Detection.png)
+![Formula Detection](screenshots/Formula%20Detection.png)
 *Automatic detection of mathematical formulas with bounding boxes*
 
 #### 2️⃣ View Extracted Formulas
-![View Extracted Formulas](screenshots/View-Extracted-Formulas.png)
+![View Extracted Formulas](screenshots/View%20Extracted%20Formulas.png)
 *Browse and view detected formulas with rendered LaTeX directly in the browser*
 
 #### 3️⃣ Extract Formulas to File
-![Extract Formulas to File](screenshots/Extract%20-Formula-to-file.png)
+![Extract Formulas to File](screenshots/Extract%20Formulas%20to%20File.png)
 *Download formulas as PDF report and ZIP archive for offline use*
 
 ## ✨ Features
