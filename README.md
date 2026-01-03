@@ -546,20 +546,26 @@ Mathematical-Formula-Detector/
 
 ## 📊 Datasets
 
-The project includes optional support for ICDAR datasets (for research and training):
+The project includes optional support for ICDAR and Kaggle datasets (for research and training):
 
-- **ICDAR 2019**: Math formula detection and recognition dataset labels (~0.38 MB)
-- **ICDAR 2021**: Extended dataset with additional formula variations (~3.2 MB)
-- **Kaggle Dataset**: Math Formula Detection dataset for additional training data
-  - 🔗 [https://www.kaggle.com/ro101010/math-formula-detection](https://www.kaggle.com/ro101010/math-formula-detection)
+| Dataset | Size | Description |
+|---------|------|-------------|
+| **ICDAR 2019** | ~0.38 MB | Math formula detection and recognition dataset labels |
+| **ICDAR 2021** | ~3.2 MB | Extended dataset with additional formula variations |
+| **Kaggle Dataset** | Varies | Math Formula Detection dataset for additional training data |
 
-**Note**: Datasets are **optional** and only needed if you plan to train/fine-tune models. The pre-trained models work out-of-the-box for inference.
+> **Note:** Datasets are **optional** and only needed if you plan to train/fine-tune models. The pre-trained models work out-of-the-box for inference.
 
-**Download datasets manually:**
-- **ICDAR Datasets**: Visit https://www.icdar.org/ (register for access)
-  - Extract ICDAR 2019 to `ICDAR2019/labels/`
-  - Extract ICDAR 2021 to `ICDAR2021/labels/`
-- **Kaggle Dataset**: Visit [https://www.kaggle.com/ro101010/math-formula-detection](https://www.kaggle.com/ro101010/math-formula-detection)
+### Download Datasets
+
+**ICDAR Datasets:**
+- Visit [https://www.icdar.org/](https://www.icdar.org/) (register for access)
+- Extract ICDAR 2019 to `ICDAR2019/labels/`
+- Extract ICDAR 2021 to `ICDAR2021/labels/`
+
+**Kaggle Dataset:**
+- Visit [https://www.kaggle.com/ro101010/math-formula-detection](https://www.kaggle.com/ro101010/math-formula-detection)
+- Download and place in your project directory
 
 ## 🔧 Core Modules
 
