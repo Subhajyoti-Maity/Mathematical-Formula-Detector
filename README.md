@@ -46,9 +46,7 @@ Then:
 
 ## 📹 Democlips
 
-### 🎬 Application Workflow
-
-See Mathematical Formula Detector in action with these key features:
+Here are some democlips showing the Mathematical Formula Detector in action:
 
 #### 1️⃣ Formula Detection
 ![Formula Detection](screenshots/Formula-Detection.png)
