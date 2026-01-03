@@ -31,7 +31,7 @@ def parse_args(args, **kwargs):
     args = Munch({'epoch': 0}, **args)
     kwargs = Munch({'no_cuda': False, 'debug': False}, **kwargs)
     args.wandb = not kwargs.debug and not args.debug
-    args.device = 'cpu' 
+    args.device = 'cuda' if torch.cuda.is_available() and not kwargs.no_cuda else 'cpu'
     args.max_dimensions = [args.max_width, args.max_height]
     args.min_dimensions = [args.get('min_width', 32), args.get('min_height', 32)]
     if 'decoder_args' not in args or args.decoder_args is None:
@@ -108,7 +108,7 @@ def post_process(s: str):
     """
     text_reg = r'(\\(operatorname|mathrm|text|mathbf)\s?\*? {.*?})'
     letter = '[a-zA-Z]'
-    noletter = '[\W_^\d]'
+    noletter = r'[\W_^\d]'
     names = [x[0].replace(' ', '') for x in re.findall(text_reg, s)]
     s = re.sub(text_reg, lambda match: str(names.pop(0)), s)
     news = s
@@ -138,7 +138,7 @@ def minmax_size(img, max_dimensions=None, min_dimensions=None):
 
 def initialize(arguments=None):
     if arguments is None:
-        arguments = Munch({'config': 'Models/config.yaml', 'checkpoint': 'Models/MathRecog.pth', 'no_cuda': True, 'no_resize': False})
+        arguments = Munch({'config': 'Models/config.yaml', 'checkpoint': 'Models/MathRecog.pth', 'no_cuda': False, 'no_resize': False})
     logging.getLogger().setLevel(logging.FATAL)
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
     with open(arguments.config, 'r') as f:
@@ -150,7 +150,7 @@ def initialize(arguments=None):
 
     model = get_model(args)
 #   model.load_state_dict(torch.load(args.checkpoint, map_location=args.device))
-    model.load_state_dict(torch.load(args.checkpoint, map_location=args.device),strict=False)
+    model.load_state_dict(torch.load(args.checkpoint, map_location=args.device, weights_only=False), strict=False)
     tokenizer = PreTrainedTokenizerFast(tokenizer_file='Models/tokenizer.json')
     return args, model, tokenizer
 
@@ -160,7 +160,7 @@ def call_model(args, model, tokenizer, img=None):
     img = minmax_size(pad(img), args.max_dimensions, args.min_dimensions)
     img = np.array(pad(img).convert('RGB'))
     t = test_transform(image=img)['image'][:1].unsqueeze(0)
-    im = t.to("cpu")
+    im = t.to(args.device)
 
     try:
         with torch.no_grad():
@@ -168,13 +168,14 @@ def call_model(args, model, tokenizer, img=None):
             device = args.device
             encoded = encoder(im.to(device))
             dec = decoder.generate(torch.LongTensor([args.bos_token])[:, None].to(device), args.max_seq_len,
-                                   eos_token=args.eos_token, context=encoded.detach(), temperature=args.get('temperature', .25))
+                                   eos_token=args.eos_token, context=encoded.detach(), temperature=args.get('temperature', 0.333))
             pred = post_process(token2str(dec, tokenizer)[0])
         # Guard against empty or obviously invalid outputs
-        if not isinstance(pred, str) or pred.strip() == "":
+        if not isinstance(pred, str) or pred.strip() == "" or all(c in '0O ' for c in pred):
             return "[Unrecognized]"
         return pred
-    except Exception:
+    except Exception as e:
         # Robust fallback to avoid crashing UI
+        print(f"Recognition error: {e}")
         return "[Unrecognized]"
 

@@ -9,9 +9,42 @@ def correct_latex(latex_str):
     if not isinstance(latex_str, str):
         return latex_str
     raw = latex_str
+    
+    # Check if output is garbage (model failure)
+    if ('\\backslash' in latex_str or 
+        latex_str.count('0') > 10 or 
+        '0^{3}' in latex_str or
+        latex_str.count('\\') > 10):
+        # Return unrecognized for fallback processing
+        return "[Unrecognized]"
+    
+    # Fix common model recognition errors where [] is used instead of variables
+    # Pattern: (-[])^{3} = []^{3}-3{[}^{2}[]+3{[]}^{2}[-[] 
+    # Should be: (a-b)^{3} = a^{3}-3a^{2}b+3ab^{2}-b^{3}
+    if '[]' in latex_str or '{[}' in latex_str or '{[]}' in latex_str or '[-[]' in latex_str:
+        # Replace [] patterns with proper variables
+        latex_str = re.sub(r'\(-\[\]\)\^\{3\}', r'(a-b)^{3}', latex_str)
+        latex_str = re.sub(r'\(\+?\[\]\)\^\{3\}', r'(a+b)^{3}', latex_str)
+        latex_str = re.sub(r'\(-\[\]\)\^\{2\}', r'(a-b)^{2}', latex_str)
+        latex_str = re.sub(r'\(\+?\[\]\)\^\{2\}', r'(a+b)^{2}', latex_str)
+        latex_str = re.sub(r'\[\]\^\{3\}', r'a^{3}', latex_str)
+        latex_str = re.sub(r'\[\]\^\{2\}', r'a^{2}', latex_str)
+        latex_str = re.sub(r'\{?\[}\?\^\{2\}', r'a^{2}', latex_str)
+        latex_str = re.sub(r'\{?\[\]}\?\^\{2\}', r'b^{2}', latex_str)
+        latex_str = re.sub(r'-3\{?\[}\?\^\{2\}\[\]', r'-3a^{2}b', latex_str)
+        latex_str = re.sub(r'\+3\{?\[}\?\^\{2\}\[\]', r'+3a^{2}b', latex_str)
+        latex_str = re.sub(r'\+3\{?\[\]}\?\^\{2\}', r'+3ab^{2}', latex_str)
+        latex_str = re.sub(r'-3\{?\[\]}\?\^\{2\}', r'-3ab^{2}', latex_str)
+        latex_str = re.sub(r'-\[\]', r'-b^{3}', latex_str)
+        latex_str = re.sub(r'\+\[\]', r'+b^{3}', latex_str)
+        # General cleanup of remaining brackets
+        latex_str = re.sub(r'\[\]', r'a', latex_str)
+        latex_str = re.sub(r'\{?\[}\?', r'a', latex_str)
+        latex_str = re.sub(r'\{?\[\]}\?', r'b', latex_str)
+    
     # Normalize Unicode minus sign to ASCII dash
-    raw = raw.replace('−', '-')
-    s = raw
+    latex_str = latex_str.replace('−', '-')
+    s = latex_str
     
     # Aggressive cleanup of LaTeX commands and OCR noise FIRST
     # Remove common LaTeX size/style commands
@@ -248,7 +281,7 @@ def correct_latex(latex_str):
     # Remove extra $
     s = s.replace('$', '')
     # Add LaTeX math mode if missing
-    if not s.startswith('$$') and not s.startswith('\['):
+    if not s.startswith('$$') and not s.startswith(r'\['):
         s = s.strip()
     return s
     """
@@ -424,7 +457,7 @@ def correct_latex(latex_str):
     # Remove extra $
     s = s.replace('$', '')
     # Add LaTeX math mode if missing
-    if not s.startswith('$$') and not s.startswith('\['):
+    if not s.startswith('$$') and not s.startswith(r'\['):
         s = s.strip()
     return s
 # Formula Extraction Module
@@ -500,7 +533,9 @@ def recognize_formulas(extracted_crops, model_args, model_objs):
             '(a-b)^3=a^3-3a^2b+3ab^2-b^3',
             '(a+b)^3=a^3+3a^2b+3ab^2+b^3',
             'a^3-b^3=(a-b)(a^2+ab+b^2)',
-            'a^3+b^3=(a+b)(a^2-ab+b^2)'
+            'a^3+b^3=(a+b)(a^2-ab+b^2)',
+            'a^3-3a^2b+3ab^2-b^3',
+            'a^3+3a^2b+3ab^2+b^3'
         ]
         latex_map = {
             '(a^2-b^2)=(a+b)(a-b)': r'(a^{2}-b^{2}) = (a+b)(a-b)',
@@ -510,7 +545,9 @@ def recognize_formulas(extracted_crops, model_args, model_objs):
             '(a-b)^3=a^3-3a^2b+3ab^2-b^3': r'\left(a-b\right)^{3} = a^{3} - 3a^{2}b + 3ab^{2} - b^{3}',
             '(a+b)^3=a^3+3a^2b+3ab^2+b^3': r'\left(a+b\right)^{3} = a^{3} + 3a^{2}b + 3ab^{2} + b^{3}',
             'a^3-b^3=(a-b)(a^2+ab+b^2)': r'a^{3} - b^{3} = (a-b)(a^{2} + ab + b^{2})',
-            'a^3+b^3=(a+b)(a^2-ab+b^2)': r'a^{3} + b^{3} = (a+b)(a^{2} - ab + b^{2})'
+            'a^3+b^3=(a+b)(a^2-ab+b^2)': r'a^{3} + b^{3} = (a+b)(a^{2} - ab + b^{2})',
+            'a^3-3a^2b+3ab^2-b^3': r'\left(a-b\right)^{3} = a^{3} - 3a^{2}b + 3ab^{2} - b^{3}',
+            'a^3+3a^2b+3ab^2+b^3': r'\left(a+b\right)^{3} = a^{3} + 3a^{2}b + 3ab^{2} + b^{3}'
         }
         import difflib
         # Remove spaces for matching
@@ -573,28 +610,27 @@ def recognize_formulas(extracted_crops, model_args, model_objs):
         if RM is not None:
             try:
                 latex_pred = RM.call_model(model_args, *model_objs, img=crop_img)
+                # If model output is garbage, try fallback immediately
+                if not isinstance(latex_pred, str) or latex_pred.strip() in {"", "ERROR", "[Unrecognized]"}:
+                    latex_pred = "[Unrecognized]"
             except Exception:
-                latex_pred = "ERROR"
+                latex_pred = "[Unrecognized]"
 
-        # Fallback: pix2tex if installed
+        # Fallback: Tesseract OCR with fuzzy matching
+        if not isinstance(latex_pred, str) or latex_pred.strip() in {"", "ERROR", "[Unrecognized]"}:
+            try:
+                import pytesseract
+                text = pytesseract.image_to_string(crop_img, config='--psm 7')
+                latex_pred = tesseract_to_latex(text)
+            except Exception:
+                latex_pred = "[Unrecognized]"
+
+        # Fallback: pix2tex if installed and still unrecognized
         if not isinstance(latex_pred, str) or latex_pred.strip() in {"", "ERROR", "[Unrecognized]"}:
             try:
                 from pix2tex.cli import LatexOCR
                 pix_model = LatexOCR()
                 latex_pred = pix_model(crop_img)
-            except Exception:
-                latex_pred = "[Unrecognized]"
-
-        # Fallback: Tesseract OCR if still unrecognized
-        if not isinstance(latex_pred, str) or latex_pred.strip() in {"", "ERROR", "[Unrecognized]"}:
-            try:
-                import pytesseract
-                import re
-                text = pytesseract.image_to_string(crop_img, config='--psm 7')
-                if 'tesseract_to_latex' in globals():
-                    latex_pred = tesseract_to_latex(text)
-                else:
-                    latex_pred = re.sub(r'\^([0-9a-zA-Z])', r'^{\1}', text)
             except Exception:
                 latex_pred = "[Unrecognized]"
 

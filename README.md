@@ -173,13 +173,13 @@ Output LaTeX → correct_latex() normalization → Final result
 
 ### ☁️ Model Downloads
 
-**Required Models:**
-- **MathDetector.ts** (27.46 MB) - Auto-downloaded on first run
-  - Download: https://drive.google.com/uc?id=1AGZTIRbx-KmLQ7bSEAcxUWWtdSrYucFz
-- **MathRecog.pth** (97.38 MB) - Auto-downloaded on first run
-  - Download: https://drive.google.com/uc?id=1oR7eNBOC_3TBhFQ1KTzuWSl7-fet4cYh
+**Required Models (Already Included):**
+- **MathDetector.ts** (27.46 MB) - Pre-downloaded in `Models/` folder
+  - Source: https://drive.google.com/uc?id=1AGZTIRbx-KmLQ7bSEAcxUWWtdSrYucFz
+- **MathRecog.pth** (97.38 MB) - Pre-downloaded in `Models/` folder
+  - Source: https://drive.google.com/uc?id=1oR7eNBOC_3TBhFQ1KTzuWSl7-fet4cYh
 
-Models are saved to `Models/` folder. No internet required after initial download.
+**Note:** Models are already included in the repository. No download required on first run.
 
 ## ✅ Requirements
 
