@@ -106,7 +106,6 @@ This project uses multiple deep learning models working together in a recognitio
 |------------|-------------|-----------|
 | **MathDetector** | `.ts` | **TorchScript** - Optimized PyTorch model for fast inference and production deployment |
 | **MathRecog** | `.pth` | **PyTorch** - Standard PyTorch checkpoint format for deep learning models |
-
 | **config** | `.yaml` | **YAML** - Model configuration file containing hyperparameters and settings |
 | **tokenizer** | `.json` | **JSON** - Configuration file containing LaTeX vocabulary and token mappings |
 
