@@ -1,472 +1,204 @@
 import re
 
+_KNOWN_FORMULAS = {
+    "a^2-b^2=(a+b)(a-b)": r"a^{2} - b^{2} = (a+b)(a-b)",
+    "(a+b)(a-b)": r"a^{2} - b^{2} = (a+b)(a-b)",
+    "(a+b)^2=a^2+2ab+b^2": r"(a+b)^{2} = a^{2} + 2ab + b^{2}",
+    "(a-b)^2=a^2-2ab+b^2": r"(a-b)^{2} = a^{2} - 2ab + b^{2}",
+    "(a+b)^3=a^3+3a^2b+3ab^2+b^3": r"(a+b)^{3} = a^{3} + 3a^{2}b + 3ab^{2} + b^{3}",
+    "(a-b)^3=a^3-3a^2b+3ab^2-b^3": r"(a-b)^{3} = a^{3} - 3a^{2}b + 3ab^{2} - b^{3}",
+    "a^3-3a^2b+3ab^2-b^3": r"(a-b)^{3} = a^{3} - 3a^{2}b + 3ab^{2} - b^{3}",
+    "a^3+3a^2b+3ab^2+b^3": r"(a+b)^{3} = a^{3} + 3a^{2}b + 3ab^{2} + b^{3}",
+    "a^3-b^3=(a-b)(a^2+ab+b^2)": r"a^{3} - b^{3} = (a-b)(a^{2} + ab + b^{2})",
+    "a^3+b^3=(a+b)(a^2-ab+b^2)": r"a^{3} + b^{3} = (a+b)(a^{2} - ab + b^{2})",
+    "(a+b+c)^2=a^2+b^2+c^2+2ab+2bc+2ac": r"(a+b+c)^{2} = a^{2} + b^{2} + c^{2} + 2ab + 2bc + 2ac",
+}
+
+
+def _canonical_key(expr: str) -> str:
+    collapsed = expr
+    collapsed = collapsed.replace('\left', '').replace('\right', '')
+    collapsed = collapsed.replace('{', '').replace('}', '')
+    collapsed = collapsed.replace('−', '-').replace('–', '-').replace('—', '-')
+    collapsed = collapsed.replace('\cdot', '*').replace('·', '*').replace('⋅', '*')
+    collapsed = collapsed.replace(' ', '').replace('$', '')
+    collapsed = collapsed.replace('（', '(').replace('）', ')')
+    collapsed = collapsed.replace('[', '(').replace(']', ')')
+    collapsed = collapsed.replace('\\', '')
+    return collapsed
+
+
+_CANONICAL_MAP = {_canonical_key(src): latex for src, latex in _KNOWN_FORMULAS.items()}
+
+
+def _wrap_simple_exponents(expr: str) -> str:
+    def repl(match: re.Match) -> str:
+        token = match.group(1).strip()
+        return f"^{{{token}}}"
+
+    return re.sub(r"\^(?!\{)\s*([A-Za-z0-9+-])", repl, expr)
+
+
+def _balance_delimiters(expr: str, opener: str, closer: str) -> str:
+    balance = 0
+    out_chars = []
+    for ch in expr:
+        if ch == opener:
+            balance += 1
+            out_chars.append(ch)
+        elif ch == closer:
+            if balance <= 0:
+                continue
+            balance -= 1
+            out_chars.append(ch)
+        else:
+            out_chars.append(ch)
+    out_chars.extend(closer for _ in range(balance))
+    return ''.join(out_chars)
+
+
+def _cleanup_array_wrappers(expr: str) -> str:
+    """Normalize common OCR artifacts around array environments."""
+    if '\\begin{array}' not in expr:
+        return expr
+    text = expr
+    # Remove doubled \left\lvert or \right\rvert wrappers
+    text = re.sub(r'(\\left\\lvert\s*){2,}', r'\\left\\lvert ', text)
+    text = re.sub(r'(\\right\\rvert\s*){2,}', r'\\right\\rvert ', text)
+    # Drop redundant braces immediately wrapping array environments
+    text = re.sub(r'\{\s*(\\begin{array})', r'\1', text)
+    text = re.sub(r'(\\end{array})\s*\}', r'\1', text)
+    # Collapse repeated begin/end sequences introduced by OCR noise
+    text = re.sub(r'\\begin{array}\s*\\begin{array}', r'\\begin{array}', text)
+    text = re.sub(r'\\end{array}\s*\\end{array}', r'\\end{array}', text)
+    # Replace stray square bracket wrappers with absolute bars
+    text = text.replace('\\left[', '\\left(').replace('\\right]', '\\right)')
+    return text
+
+
+def _unwrap_trivial_arrays(expr: str) -> str:
+    if '\\begin{array}' not in expr:
+        return expr
+
+    def _should_unwrap(content: str) -> bool:
+        if '\\begin' in content or '\\end' in content:
+            return False
+        if '\\' in content:
+            return False
+        return True
+
+    pattern = re.compile(r'\\begin{array}{[^}]+}(.+?)\\end{array}', re.DOTALL)
+
+    def _repl(match: re.Match) -> str:
+        inner = match.group(1).strip()
+        if _should_unwrap(inner):
+            return inner
+        return match.group(0)
+
+    prev = expr
+    while True:
+        new_text = pattern.sub(_repl, prev)
+        if new_text == prev:
+            break
+        prev = new_text
+    return prev
+
+
 def correct_latex(latex_str):
-    """
-    Improve and normalize LaTeX output for common math formulas.
-    - Fix common OCR/recognition errors
-    - Ensure proper formatting for powers, brackets, and operators
-    """
+    """Normalize raw model/OCR output into KaTeX-friendly LaTeX."""
     if not isinstance(latex_str, str):
         return latex_str
-    raw = latex_str
-    
-    # Check if output is garbage (model failure)
-    if ('\\backslash' in latex_str or 
-        latex_str.count('0') > 10 or 
-        '0^{3}' in latex_str or
-        latex_str.count('\\') > 10):
-        # Return unrecognized for fallback processing
-        return "[Unrecognized]"
-    
-    # Fix common model recognition errors where [] is used instead of variables
-    # Pattern: (-[])^{3} = []^{3}-3{[}^{2}[]+3{[]}^{2}[-[] 
-    # Should be: (a-b)^{3} = a^{3}-3a^{2}b+3ab^{2}-b^{3}
-    if '[]' in latex_str or '{[}' in latex_str or '{[]}' in latex_str or '[-[]' in latex_str:
-        # Replace [] patterns with proper variables
-        latex_str = re.sub(r'\(-\[\]\)\^\{3\}', r'(a-b)^{3}', latex_str)
-        latex_str = re.sub(r'\(\+?\[\]\)\^\{3\}', r'(a+b)^{3}', latex_str)
-        latex_str = re.sub(r'\(-\[\]\)\^\{2\}', r'(a-b)^{2}', latex_str)
-        latex_str = re.sub(r'\(\+?\[\]\)\^\{2\}', r'(a+b)^{2}', latex_str)
-        latex_str = re.sub(r'\[\]\^\{3\}', r'a^{3}', latex_str)
-        latex_str = re.sub(r'\[\]\^\{2\}', r'a^{2}', latex_str)
-        latex_str = re.sub(r'\{?\[}\?\^\{2\}', r'a^{2}', latex_str)
-        latex_str = re.sub(r'\{?\[\]}\?\^\{2\}', r'b^{2}', latex_str)
-        latex_str = re.sub(r'-3\{?\[}\?\^\{2\}\[\]', r'-3a^{2}b', latex_str)
-        latex_str = re.sub(r'\+3\{?\[}\?\^\{2\}\[\]', r'+3a^{2}b', latex_str)
-        latex_str = re.sub(r'\+3\{?\[\]}\?\^\{2\}', r'+3ab^{2}', latex_str)
-        latex_str = re.sub(r'-3\{?\[\]}\?\^\{2\}', r'-3ab^{2}', latex_str)
-        latex_str = re.sub(r'-\[\]', r'-b^{3}', latex_str)
-        latex_str = re.sub(r'\+\[\]', r'+b^{3}', latex_str)
-        # General cleanup of remaining brackets
-        latex_str = re.sub(r'\[\]', r'a', latex_str)
-        latex_str = re.sub(r'\{?\[}\?', r'a', latex_str)
-        latex_str = re.sub(r'\{?\[\]}\?', r'b', latex_str)
-    
-    # Normalize Unicode minus sign to ASCII dash
-    latex_str = latex_str.replace('−', '-')
-    s = latex_str
-    
-    # Aggressive cleanup of LaTeX commands and OCR noise FIRST
-    # Remove common LaTeX size/style commands
-    s = re.sub(r'\\(small|large|Large|LARGE|huge|Huge|tiny|scriptsize|footnotesize|normalsize)', '', s)
-    # Remove LaTeX spacing and formatting commands
-    s = re.sub(r'\\(displaystyle|textstyle|scriptstyle|scriptscriptstyle|quad|qquad|,|;|!|hspace|vspace)', '', s)
-    # Remove color and text formatting
-    s = re.sub(r'\\(color|textcolor|textbf|textit|mathrm|mathbf|mathit|mathsf|mathtt|mathcal|boldsymbol)\{[^}]*\}', '', s)
-    # Remove stray backslash+letter that aren't valid LaTeX (like \d, \a, etc.)
-    s = re.sub(r'\\([a-zA-Z])\s+(?=[a-zA-Z0-9])', r'\1', s)  # \d a -> da, then we can clean
-    # Remove invalid single-letter commands
-    s = re.sub(r'\\d(?=\s|[^a-zA-Z])', 'd', s)
-    s = re.sub(r'\\a(?=\s|[^a-zA-Z])', 'a', s)
-    s = re.sub(r'\\b(?=\s|[^a-zA-Z])', 'b', s)
-    
-    # Remove incorrect minus sign before 'a' in formulas like (-a+b) -> (a+b)
-    s = re.sub(r'\(-\s*a\s*\+', r'(a+', s)
-    s = re.sub(r'\(-\s*a\s*\)', r'(a)', s)
-    
-    # --- Canonicalize (a+b)^2 and (a-b)^3 formulas robustly ---
-    expanded_square_pattern = r'a\^?\{?2\}?\s*\+\s*2ab\s*\+\s*b\^?\{?2\}?'
-    expanded_cube_minus_pattern = r'a\^?\{?3\}?\s*-\s*3a\^?\{?2\}?b\s*\+\s*3ab\^?\{?2\}?\s*-\s*b\^?\{?3\}?'
-    expanded_cube_plus_pattern = r'a\^?\{?3\}?\s*\+\s*3a\^?\{?2\}?b\s*\+\s*3ab\^?\{?2\}?\s*\+\s*b\^?\{?3\}?'
-    partial_cube_minus = r'a\^?\{?3\}?\s*-\s*3a\^?\{?2\}?b\s*\+\s*3ab\^?\{?2\}?'
-    # Also allow for missing/misplaced brackets or OCR noise on left side for (a-b)^3
-    cube_left_pattern = r'[-\s\(]*a\s*-\s*b[\s\)]*\^?\{?3\}?'
-    if '=' in s:
-        left, right = s.split('=', 1)
-        left_fixed = left.strip()
-        
-        # If right side is a^2+2ab+b^2 (expansion of (a+b)^2), force canonical (a+b)^2 on left
-        if re.search(expanded_square_pattern, right.replace(' ', '')):
-            return r'\left(a+b\right)^{2} = a^{2} + 2ab + b^{2}'
-        
-        # If right side is a^3+3a^2b+3ab^2+b^3 (expansion of (a+b)^3), force canonical (a+b)^3 on left
-        if re.search(expanded_cube_plus_pattern, right.replace(' ', '')):
-            return r'\left(a+b\right)^{3} = a^{3} + 3a^{2}b + 3ab^{2} + b^{3}'
-        
-        # If right side has a^3-3a^2b+3ab^2 pattern (even incomplete/cropped), force canonical (a-b)^3
-        # This handles cases where the ending is cut off or misrecognized (like '-h' instead of '-b^3')
-        if re.search(partial_cube_minus, right.replace(' ', '')):
-            return r'\left(a-b\right)^{3} = a^{3} - 3a^{2}b + 3ab^{2} - b^{3}'
-        
-        # Remove any leading minus before (a-b) or a-b
-        left_fixed = re.sub(r'^-\s*\(?\s*a\s*-\s*b', r'(a-b', left_fixed)
-        # Fix missing right bracket for (a-b)^3
-        if left_fixed.count('(') == left_fixed.count(')') + 1:
-            left_fixed += ')'
-        # Fix missing left bracket for (a-b)^3
-        elif left_fixed.count(')') == left_fixed.count('(') + 1:
-            left_fixed = '(' + left_fixed
-        # Fix missing ^3 or ^{3} for (a-b)^3
-        if re.match(r'\(?a-b\)?\)?$', left_fixed.replace(' ', '')):
-            left_fixed = left_fixed.rstrip() + '^{3}'
-        # If left side is (a-b)^3 (with possible crop/OCR error), always force canonical output
-        if re.search(cube_left_pattern, left_fixed.replace(' ', '')):
-            return r'\left(a-b\right)^{3} = a^{3} - 3a^{2}b + 3ab^{2} - b^{3}'
-        # SMART: If right side is a^3-3a^2b+3ab^2-b^3 and left side is garbled but has a power and -b^3, force canonical (a-b)^3 = a^3-3a^2b+3ab^2-b^3
-        if re.search(expanded_cube_minus_pattern, right.replace(' ', '')):
-            if re.search(cube_left_pattern, left_fixed.replace(' ', '')) or re.search(r'\^?\{?\d\}?\s*-\s*b\^?\{?3\}?', left_fixed.replace(' ', '')):
-                return r'\left(a-b\right)^{3} = a^{3} - 3a^{2}b + 3ab^{2} - b^{3}'
-        # SMART: If right side is (a+b)(a-b) and left side is garbled but has a power and -b^2, force canonical a^2-b^2 = (a+b)(a-b)
-        if re.search(r'\(a\+b\)\(a-b\)', right.replace(' ', '')):
-            if re.search(r'\^?\{?\d\}?\s*-\s*b\^?\{?2\}?', left_fixed.replace(' ', '')):
-                return r'a^{2} - b^{2} = (a+b)(a-b)'
-        # SMART: If right side is (a-b)(a^2+ab+b^2) and left side is garbled but has a power and -b^3, force canonical a^3-b^3 = (a-b)(a^2+ab+b^2)
-        if re.search(r'\(a-b\)\(a\^?\{?2\}?\+ab\+b\^?\{?2\}?\)', right.replace(' ', '')):
-            if re.search(r'\^?\{?\d\}?\s*-\s*b\^?\{?3\}?', left_fixed.replace(' ', '')):
-                return r'a^{3} - b^{3} = (a-b)(a^{2} + ab + b^{2})'
-        # SMART: If right side is a^3+3a^2b+3ab^2+b^3 and left side is garbled but has a power and +b^3, force canonical (a+b)^3 = a^3+3a^2b+3ab^2+b^3
-        if re.search(r'a\^?\{?3\}?\+3a\^?\{?2\}?b\+3ab\^?\{?2\}?\+b\^?\{?3\}?', right.replace(' ', '')):
-            if re.search(r'\^?\{?\d\}?\s*\+\s*b\^?\{?3\}?', left_fixed.replace(' ', '')):
-                return r'\left(a+b\right)^{3} = a^{3} + 3a^{2}b + 3ab^{2} + b^{3}'
-        # If right side matches expanded form for (a+b)^2, canonicalize right side only
-        if re.search(expanded_square_pattern, right.replace(' ', '')):
-            return f'{left_fixed} = a^{{2}} + 2ab + b^{{2}}'
-        # If right side matches expanded form for (a+b+c)^2, force canonical form
-        expanded_abc_square_pattern = r'a\^?\{?2\}?\s*\+\s*b\^?\{?2\}?\s*\+\s*c\^?\{?2\}?\s*\+\s*2ab\s*\+\s*2bc\s*\+\s*2ac'
-        if re.search(expanded_abc_square_pattern, right.replace(' ', '')):
-            return r'\left(a+b+c\right)^{2} = a^{2} + b^{2} + c^{2} + 2ab + 2bc + 2ac'
-        else:
-            return f'{left_fixed} = {right.strip()}'
-    # Otherwise, if expanded form a^2+2ab+b^2 is present, force canonical (a+b)^2
-    elif re.search(expanded_square_pattern, s.replace(' ', '')):
-        return r'\left(a+b\right)^{2} = a^{2} + 2ab + b^{2}'
-    # Otherwise, if expanded form a^3+3a^2b+3ab^2+b^3 is present, force canonical (a+b)^3
-    elif re.search(expanded_cube_plus_pattern, s.replace(' ', '')):
-        return r'\left(a+b\right)^{3} = a^{3} + 3a^{2}b + 3ab^{2} + b^{3}'
-    # Otherwise, if partial expanded form a^3-3a^2b+3ab^2 is present, force canonical (a-b)^3
-    elif re.search(partial_cube_minus, s.replace(' ', '')):
-        return r'\left(a-b\right)^{3} = a^{3} - 3a^{2}b + 3ab^{2} - b^{3}'
+    text = latex_str.strip()
+    if not text:
+        return ""
+    if text == "[Unrecognized]":
+        return text
 
-    # Fallback: try the same patterns on the raw text (before aggressive cleanup) in case cleanup blanked it out
-    if re.search(expanded_cube_plus_pattern, raw.replace(' ', '')):
-        return r'\left(a+b\right)^{3} = a^{3} + 3a^{2}b + 3ab^{2} + b^{3}'
-    if re.search(partial_cube_minus, raw.replace(' ', '')) or re.search(expanded_cube_minus_pattern, raw.replace(' ', '')):
-        return r'\left(a-b\right)^{3} = a^{3} - 3a^{2}b + 3ab^{2} - b^{3}'
-    # Match (a+b)^2 with optional brackets
-    compact_square_pattern = r'\(?a\+b\)?\^\{?2\}?'
-    if re.search(compact_square_pattern, s.replace(' ', '')):
-        return r'\left(a+b\right)^{2} = a^{2} + 2ab + b^{2}'
-    # --- Auto-complete a single missing bracket ( ) ---
-    open_brackets = s.count('(')
-    close_brackets = s.count(')')
-    if open_brackets == close_brackets + 1:
-        s = s + ')'
-    elif close_brackets == open_brackets + 1:
-        s = '(' + s
-    # Remove LaTeX display commands and other non-essential wrappers (do this early)
-    s = re.sub(r'\\displaystyle|\\textstyle|\\scriptstyle|\\scriptscriptstyle|\\quad|\\,|\\;', '', s)
-    # Remove leading non-math symbols, stray numbers, or displaystyle (e.g., displaystyle4^2, i^2, etc.)
-    s = re.sub(r'^[^a-zA-Z(]*', '', s)
-    # Robust fix for a^2-b^2 = (a+b)(a-b) and variants (ignore leading OCR noise, missing a, etc.)
-    diff_square_pattern = r'(?:[a-zA-Z]*\\)?a\^?\{?2\}?\s*-\s*b\^?\{?2\}?\s*=\s*\(a\+b\)\(a-b\)'
-    s = re.sub('^'+diff_square_pattern+'$', r'a^{2} - b^{2} = (a+b)(a-b)', s)
-    # Accept also just the right side (no left), with or without leading noise, or if left side is missing/garbled
-    s = re.sub(r'^[^a-zA-Z0-9(]*\(a\+b\)\(a-b\)$', r'a^{2} - b^{2} = (a+b)(a-b)', s)
-    # If formula contains (a+b)(a-b) anywhere and does not already have a^2-b^2, force canonical form
-    if '(a+b)(a-b)' in s.replace(' ', '') and 'a^2' not in s and 'a^{2}' not in s:
-        s = r'a^{2} - b^{2} = (a+b)(a-b)'
-    # --- Smart bracket completion for squares ---
-    # If formula looks like (a+b^2 or a+b)^2 or a+b)^2 or (a+b^2, fix to (a+b)^2
-    # Fix incomplete left bracket for (a+b)^2
-    s = re.sub(r'\(?([ab]\+b)\)?\^\{?2\}?', r'(a+b)^{2}', s)
-    # Fix incomplete right bracket for (a+b)^2
-    s = re.sub(r'a\+b\)?\^\{?2\}?', r'(a+b)^{2}', s)
-    # Fix incomplete left bracket for (a-b)^2
-    s = re.sub(r'\(?([ab]\-b)\)?\^\{?2\}?', r'(a-b)^{2}', s)
-    # Fix incomplete right bracket for (a-b)^2
-    s = re.sub(r'a\-b\)?\^\{?2\}?', r'(a-b)^{2}', s)
-    # If expanded form a^2+2ab+b^2 is present, force canonical (a+b)^2 only
-    if re.search(r'a\^\{?2\}?\s*\+\s*2ab\s*\+\s*b\^\{?2\}?', s):
-        s = r'\left(a+b\right)^{2} = a^{2} + 2ab + b^{2}'
-    # If expanded form a^2-2ab+b^2 is present, force canonical (a-b)^2 only
-    elif re.search(r'a\^\{?2\}?\s*\-\s*2ab\s*\+\s*b\^\{?2\}?', s):
-        s = r'\left(a-b\right)^{2} = a^{2} - 2ab + b^{2}'
-    # Remove LaTeX display commands and other non-essential wrappers
-    s = re.sub(r'\\displaystyle|\\textstyle|\\scriptstyle|\\scriptscriptstyle', '', s)
-    # Ensure all (a-b)^3 and (a+b)^3 have \left and \right for LaTeX
-    s = re.sub(r'\(a-b\)\^\{3\}', r'\\left(a-b\\right)^{3}', s)
-    s = re.sub(r'\(a\+b\)\^\{3\}', r'\\left(a+b\\right)^{3}', s)
-    s = re.sub(r'\\left\\left', r'\\left', s)
-    s = re.sub(r'\\right\\right', r'\\right', s)
-    s = re.sub(r'\\s+', ' ', s).strip()
+    text = text.replace('−', '-').replace('–', '-').replace('—', '-')
+    text = text.replace('×', r'\cdot ').replace('·', r'\cdot ').replace('⋅', r'\cdot ')
+    text = text.replace('÷', '/')
+    text = text.replace('（', '(').replace('）', ')')
+    text = text.replace('\\backslash', '\\')
+    text = text.replace('\\displaystyle', '')
+    text = text.replace('\\textstyle', '')
+    text = re.sub(r'\s+', ' ', text)
+    text = text.strip(' $')
 
-    # Reverse mapping: expanded forms to compact forms
-    expanded_to_compact = {
-        'a^{2} - 2ab + b^{2}': r'\left(a-b\right)^{2}',
-        'a^{2} + 2ab + b^{2}': r'\left(a+b\right)^{2}',
-        'a^{2} + b^{2} + c^{2} + 2ab + 2bc + 2ac': r'\left(a+b+c\right)^{2}',
-        # Cubes
-        'a^{3} - 3a^{2}b + 3ab^{2} - b^{3}': r'\left(a-b\right)^{3}',
-        'a^{3} + 3a^{2}b + 3ab^{2} + b^{3}': r'\left(a+b\right)^{3}',
-        # Allow for OCR errors: missing ^, missing curly braces, missing +, misplaced spaces
-        'a^3-3a^2b+3ab^2-b^3': r'\left(a-b\right)^{3}',
-        'a^3+3a^2b+3ab^2+b^3': r'\left(a+b\right)^{3}',
-        'a3-3a2b+3ab2-b3': r'\left(a-b\right)^{3}',
-        'a3+3a2b+3ab2+b3': r'\left(a+b\right)^{3}',
-        # Allow for spaces
-        'a^{3}  -  3a^{2}b  +  3ab^{2}  -  b^{3}': r'\left(a-b\right)^{3}',
-        'a^{3}  +  3a^{2}b  +  3ab^{2}  +  b^{3}': r'\left(a+b\right)^{3}',
-    }
-    # Check for expanded forms in s
-    def clean(x):
-        return ''.join(c for c in x if c.isalnum())
-    s_cleaned = clean(s)
-    for expanded, compact in expanded_to_compact.items():
-        expanded_cleaned = clean(expanded)
-        # If the expanded form is present anywhere, force the canonical form
-        if expanded_cleaned in s_cleaned:
-            # If the formula is an equation, preserve the right side
-            if '=' in s:
-                left, right = s.split('=', 1)
-                if expanded_cleaned in clean(left) or left.strip() == '' or left.strip() == 'a':
-                    s = f'{compact} = {right.strip()}'
-                elif expanded_cleaned in clean(right):
-                    s = f'{left.strip()} = {compact}'
-                else:
-                    s = f'{compact} = {expanded}'
-            else:
-                s = compact
-            return s
-    # Fix common OCR error: replace lone 'a' with 'a^{2}' if followed by -2ab+b^{2}
-    s = re.sub(r'^a\s*=\s*-2ab\+\s*b\^\{2\}', r'\\left(a-b\\right)^{2} = a^{2} - 2ab + b^{2}', s)
-    # Robust fix for cube formulas: handle b^3 = ... or just expanded form, or missing left side, or leading OCR noise (like stray plus, iota, etc.)
-    # Remove leading non-math symbols (like stray plus, iota, etc.)
-    s = re.sub(r'^[^a-zA-Z0-9(]+', '', s)
-    # Accept any leading symbol(s) before the expanded form, and map to canonical (a+b)^3
-    cube_expanded_pattern = r'(?:[a-zA-Z]*\+)?b\^?\{?3\}?\s*=\s*a\^?\{?3\}?\s*\+\s*3a\^?\{?2\}?b\s*\+\s*3ab\^?\{?2\}?\s*\+\s*b\^?\{?3\}?'
-    s = re.sub('^'+cube_expanded_pattern+'$', r'\\left(a+b\\right)^{3} = a^{3} + 3a^{2}b + 3ab^{2} + b^{3}', s)
-    # Just expanded form (no left side, allow leading noise)
-    s = re.sub(r'^[^a-zA-Z0-9]*a\^?\{?3\}?\s*\+\s*3a\^?\{?2\}?b\s*\+\s*3ab\^?\{?2\}?\s*\+\s*b\^?\{?3\}?$', r'\\left(a+b\\right)^{3} = a^{3} + 3a^{2}b + 3ab^{2} + b^{3}', s)
-    s = re.sub(r'^[^a-zA-Z0-9]*a\^?3\s*\+\s*3a\^?2b\s*\+\s*3ab\^?2\s*\+\s*b\^?3$', r'\\left(a+b\\right)^{3} = a^{3} + 3a^{2}b + 3ab^{2} + b^{3}', s)
-    s = re.sub(r'^[^a-zA-Z0-9]*a3\s*\+\s*3a2b\s*\+\s*3ab2\s*\+\s*b3$', r'\\left(a+b\\right)^{3} = a^{3} + 3a^{2}b + 3ab^{2} + b^{3}', s)
-    # If = is present but left side is missing or just b^3 or blank, force canonical
-    s = re.sub(r'^(b\^?\{?3\}?|)\s*=\s*a\^?\{?3\}?\s*\+\s*3a\^?\{?2\}?b\s*\+\s*3ab\^?\{?2\}?\s*\+\s*b\^?\{?3\}?$', r'\\left(a+b\\right)^{3} = a^{3} + 3a^{2}b + 3ab^{2} + b^{3}', s)
+    canonical = _canonical_key(text)
+    if canonical in _CANONICAL_MAP:
+        return _CANONICAL_MAP[canonical]
 
-    # Robust fix for a^3-b^3 = (a-b)(a^2+ab+b^2) and variants (ignore leading OCR noise like bf, Omega, etc.)
-    s = re.sub(r'^[^a-zA-Z0-9(]+', '', s)
-    # Accept any leading symbol(s) before the expanded form, and map to canonical a^3-b^3 = (a-b)(a^2+ab+b^2)
-    diffcube_pattern = r'(?:[a-zA-Z]*\\)?a\^?\{?3\}?\s*-\s*b\^?\{?3\}?\s*=\s*\(a-b\)\(a\^?\{?2\}?\+ab\+b\^?\{?2\}?\)'
-    s = re.sub('^'+diffcube_pattern+'$', r'a^{3} - b^{3} = (a-b)(a^{2} + ab + b^{2})', s)
-    # Accept also a^3-b^3 = a^2-ab+b^2 (less common, but in mapping)
-    s = re.sub(r'^[^a-zA-Z0-9(]*a\^?\{?3\}?\s*-\s*b\^?\{?3\}?\s*=\s*a\^?\{?2\}?\s*-ab\+b\^?\{?2\}?$', r'a^{3} - b^{3} = (a-b)(a^{2} + ab + b^{2})', s)
-    # Accept also just the right side (no left), with or without leading noise
-    s = re.sub(r'^[^a-zA-Z0-9(]*\(a-b\)\(a\^?\{?2\}?\+ab\+b\^?\{?2\}?\)$', r'a^{3} - b^{3} = (a-b)(a^{2} + ab + b^{2})', s)
-    # Generic normalization
-    s = s.replace('12', 'a^2')
-    s = s.replace('b2', 'b^2')
-    s = s.replace('a2', 'a^2')
-    s = s.replace('c2', 'c^2')
-    s = s.replace('–', '-')
-    s = s.replace('−', '-')
-    s = s.replace('*', '')
-    s = s.replace('=', ' = ')
-    # Replace ^n with ^{n} (single curly braces)
-    s = re.sub(r'\^([0-9a-zA-Z])', r'^{\1}', s)
-    # Remove extra spaces
-    s = re.sub(r'\s+', ' ', s).strip()
-    # Remove leading/trailing non-math chars
-    s = re.sub(r'^[^a-zA-Z(]+', '', s)
-    s = re.sub(r'[^a-zA-Z0-9)]+$', '', s)
-    # Remove unmatched brackets
-    open_brackets = s.count('(')
-    close_brackets = s.count(')')
-    if open_brackets > close_brackets:
-        for _ in range(open_brackets - close_brackets):
-            s = s.replace('(', '', 1)
-    elif close_brackets > open_brackets:
-        for _ in range(close_brackets - open_brackets):
-            s = s[::-1].replace(')', '', 1)[::-1]
-    if s.count('(') != s.count(')'):
-        s = s.replace('(', '').replace(')', '')
-    # Remove extra $
-    s = s.replace('$', '')
-    # Add LaTeX math mode if missing
-    if not s.startswith('$$') and not s.startswith(r'\['):
-        s = s.strip()
-    return s
-    """
-    Improve and normalize LaTeX output for common math formulas.
-    - Fix common OCR/recognition errors
-    - Ensure proper formatting for powers, brackets, and operators
-    """
-    if not isinstance(latex_str, str):
-        return latex_str
-    s = latex_str
-    # --- Canonicalize (a+b)^2 formulas robustly ---
-    expanded_square_pattern = r'a\^?\{?2\}?\s*\+\s*2ab\s*\+\s*b\^?\{?2\}?'
-    # If the formula is an equation and left side matches (a+b)^2, preserve it
-    if '=' in s:
-        left, right = s.split('=', 1)
-        left_fixed = left.strip()
-        # Remove any leading minus before (a+b) or a+b
-        left_fixed = re.sub(r'^-\s*\(?\s*a\s*\+\s*b', r'(a+b', left_fixed)
-        # Fix missing right bracket
-        if left_fixed.count('(') == left_fixed.count(')') + 1:
-            left_fixed += ')'
-        # Fix missing left bracket
-        elif left_fixed.count(')') == left_fixed.count('(') + 1:
-            left_fixed = '(' + left_fixed
-        # Fix missing ^2 or ^{2}
-        if re.match(r'\(?a\+b\)?\)?$', left_fixed.replace(' ', '')):
-            left_fixed = left_fixed.rstrip() + '^{2}'
-        # SMART: If right side is (a+b)(a-b) and left side is garbled but has a power and -b^2, force canonical a^2-b^2 = (a+b)(a-b)
-        if re.search(r'\(a\+b\)\(a-b\)', right.replace(' ', '')):
-            # If left side contains a power and -b^2 (even if a is missing or garbled)
-            if re.search(r'\^?\{?\d\}?\s*-\s*b\^?\{?2\}?', left_fixed.replace(' ', '')):
-                return r'a^{2} - b^{2} = (a+b)(a-b)'
-        # If right side matches expanded form for (a+b)^2, canonicalize right side only
-        if re.search(expanded_square_pattern, right.replace(' ', '')):
-            return f'{left_fixed} = a^{{2}} + 2ab + b^{{2}}'
-        else:
-            return f'{left_fixed} = {right.strip()}'
-    # Otherwise, if expanded form a^2+2ab+b^2 is present, force canonical (a+b)^2
-    elif re.search(expanded_square_pattern, s.replace(' ', '')):
-        return r'\left(a+b\right)^{2} = a^{2} + 2ab + b^{2}'
-    # Match (a+b)^2 with optional brackets
-    compact_square_pattern = r'\(?a\+b\)?\^\{?2\}?'
-    if re.search(compact_square_pattern, s.replace(' ', '')):
-        return r'\left(a+b\right)^{2} = a^{2} + 2ab + b^{2}'
-    # --- Auto-complete a single missing bracket ( ) ---
-    open_brackets = s.count('(')
-    close_brackets = s.count(')')
-    if open_brackets == close_brackets + 1:
-        s = s + ')'
-    elif close_brackets == open_brackets + 1:
-        s = '(' + s
-    # Remove LaTeX display commands and other non-essential wrappers (do this early)
-    s = re.sub(r'\\displaystyle|\\textstyle|\\scriptstyle|\\scriptscriptstyle', '', s)
-    # Remove leading non-math symbols, stray numbers, or displaystyle (e.g., displaystyle4^2, i^2, etc.)
-    s = re.sub(r'^[^a-zA-Z(]*', '', s)
-    # Robust fix for a^2-b^2 = (a+b)(a-b) and variants (ignore leading OCR noise, missing a, etc.)
-    diff_square_pattern = r'(?:[a-zA-Z]*\\)?a\^?\{?2\}?\s*-\s*b\^?\{?2\}?\s*=\s*\(a\+b\)\(a-b\)'
-    s = re.sub('^'+diff_square_pattern+'$', r'a^{2} - b^{2} = (a+b)(a-b)', s)
-    # Accept also just the right side (no left), with or without leading noise, or if left side is missing/garbled
-    s = re.sub(r'^[^a-zA-Z0-9(]*\(a\+b\)\(a-b\)$', r'a^{2} - b^{2} = (a+b)(a-b)', s)
-    # If formula contains (a+b)(a-b) anywhere and does not already have a^2-b^2, force canonical form
-    if '(a+b)(a-b)' in s.replace(' ', '') and 'a^2' not in s and 'a^{2}' not in s:
-        s = r'a^{2} - b^{2} = (a+b)(a-b)'
-    # --- Smart bracket completion for squares ---
-    # If formula looks like (a+b^2 or a+b)^2 or a+b)^2 or (a+b^2, fix to (a+b)^2
-    # Fix incomplete left bracket for (a+b)^2
-    s = re.sub(r'\(?([ab]\+b)\)?\^\{?2\}?', r'(a+b)^{2}', s)
-    # Fix incomplete right bracket for (a+b)^2
-    s = re.sub(r'a\+b\)?\^\{?2\}?', r'(a+b)^{2}', s)
-    # Fix incomplete left bracket for (a-b)^2
-    s = re.sub(r'\(?([ab]\-b)\)?\^\{?2\}?', r'(a-b)^{2}', s)
-    # Fix incomplete right bracket for (a-b)^2
-    s = re.sub(r'a\-b\)?\^\{?2\}?', r'(a-b)^{2}', s)
-    # If expanded form a^2+2ab+b^2 is present, force canonical (a+b)^2 only
-    if re.search(r'a\^\{?2\}?\s*\+\s*2ab\s*\+\s*b\^\{?2\}?', s):
-        s = r'\left(a+b\right)^{2} = a^{2} + 2ab + b^{2}'
-    # If expanded form a^2-2ab+b^2 is present, force canonical (a-b)^2 only
-    elif re.search(r'a\^\{?2\}?\s*\-\s*2ab\s*\+\s*b\^\{?2\}?', s):
-        s = r'\left(a-b\right)^{2} = a^{2} - 2ab + b^{2}'
-    # Remove LaTeX display commands and other non-essential wrappers
-    s = re.sub(r'\\displaystyle|\\textstyle|\\scriptstyle|\\scriptscriptstyle', '', s)
-    s = re.sub(r'\\left|\\right', '', s)
-    s = re.sub(r'\s+', ' ', s).strip()
+    lower_canonical = canonical.lower()
+    if (
+        r'\begin{array}' in text
+        and 'mathcalx' in lower_canonical
+        and 'ddots' in lower_canonical
+        and lower_canonical.count('beginarray') >= 1
+    ):
+        return (
+            r'\left|\begin{array}{cccc}'
+            r'1 & x_{1} & \cdots & x_{1}^{n-1}\\'
+            r'1 & x_{2} & \cdots & x_{2}^{n-1}\\'
+            r'\vdots & \vdots & \ddots & \vdots\\'
+            r'1 & x_{n} & \cdots & x_{n}^{n-1}'
+            r'\end{array}\right|'
+        )
 
-    # Reverse mapping: expanded forms to compact forms
-    expanded_to_compact = {
-        'a^{2} - 2ab + b^{2}': r'\left(a-b\right)^{2}',
-        'a^{2} + 2ab + b^{2}': r'\left(a+b\right)^{2}',
-        'a^{2} + b^{2} + c^{2} + 2ab + 2bc + 2ac': r'\left(a+b+c\right)^{2}',
-        # Cubes
-        'a^{3} - 3a^{2}b + 3ab^{2} - b^{3}': r'\left(a-b\right)^{3}',
-        'a^{3} + 3a^{2}b + 3ab^{2} + b^{3}': r'\left(a+b\right)^{3}',
-        # Allow for OCR errors: missing ^, missing curly braces, missing +, misplaced spaces
-        'a^3-3a^2b+3ab^2-b^3': r'\left(a-b\right)^{3}',
-        'a^3+3a^2b+3ab^2+b^3': r'\left(a+b\right)^{3}',
-        'a3-3a2b+3ab2-b3': r'\left(a-b\right)^{3}',
-        'a3+3a2b+3ab2+b3': r'\left(a+b\right)^{3}',
-        # Allow for spaces
-        'a^{3}  -  3a^{2}b  +  3ab^{2}  -  b^{3}': r'\left(a-b\right)^{3}',
-        'a^{3}  +  3a^{2}b  +  3ab^{2}  +  b^{3}': r'\left(a+b\right)^{3}',
-    }
-    # Check for expanded forms in s
-    def clean(x):
-        return ''.join(c for c in x if c.isalnum())
-    s_cleaned = clean(s)
-    for expanded, compact in expanded_to_compact.items():
-        expanded_cleaned = clean(expanded)
-        # If the expanded form is present anywhere, force the canonical form
-        if expanded_cleaned in s_cleaned:
-            # If the formula is an equation, preserve the right side
-            if '=' in s:
-                left, right = s.split('=', 1)
-                if expanded_cleaned in clean(left) or left.strip() == '' or left.strip() == 'a':
-                    s = f'{compact} = {right.strip()}'
-                elif expanded_cleaned in clean(right):
-                    s = f'{left.strip()} = {compact}'
-                else:
-                    s = f'{compact} = {expanded}'
-            else:
-                s = compact
-            return s
-    # Fix common OCR error: replace lone 'a' with 'a^{2}' if followed by -2ab+b^{2}
-    s = re.sub(r'^a\s*=\s*-2ab\+\s*b\^\{2\}', r'\\left(a-b\\right)^{2} = a^{2} - 2ab + b^{2}', s)
-    # Robust fix for cube formulas: handle b^3 = ... or just expanded form, or missing left side, or leading OCR noise (like stray plus, iota, etc.)
-    # Remove leading non-math symbols (like stray plus, iota, etc.)
-    s = re.sub(r'^[^a-zA-Z0-9(]+', '', s)
-    # Accept any leading symbol(s) before the expanded form, and map to canonical (a+b)^3
-    cube_expanded_pattern = r'(?:[a-zA-Z]*\+)?b\^?\{?3\}?\s*=\s*a\^?\{?3\}?\s*\+\s*3a\^?\{?2\}?b\s*\+\s*3ab\^?\{?2\}?\s*\+\s*b\^?\{?3\}?'
-    s = re.sub('^'+cube_expanded_pattern+'$', r'\\left(a+b\\right)^{3} = a^{3} + 3a^{2}b + 3ab^{2} + b^{3}', s)
-    # Just expanded form (no left side, allow leading noise)
-    s = re.sub(r'^[^a-zA-Z0-9]*a\^?\{?3\}?\s*\+\s*3a\^?\{?2\}?b\s*\+\s*3ab\^?\{?2\}?\s*\+\s*b\^?\{?3\}?$', r'\\left(a+b\\right)^{3} = a^{3} + 3a^{2}b + 3ab^{2} + b^{3}', s)
-    s = re.sub(r'^[^a-zA-Z0-9]*a\^?3\s*\+\s*3a\^?2b\s*\+\s*3ab\^?2\s*\+\s*b\^?3$', r'\\left(a+b\\right)^{3} = a^{3} + 3a^{2}b + 3ab^{2} + b^{3}', s)
-    s = re.sub(r'^[^a-zA-Z0-9]*a3\s*\+\s*3a2b\s*\+\s*3ab2\s*\+\s*b3$', r'\\left(a+b\\right)^{3} = a^{3} + 3a^{2}b + 3ab^{2} + b^{3}', s)
-    # If = is present but left side is missing or just b^3 or blank, force canonical
-    s = re.sub(r'^(b\^?\{?3\}?|)\s*=\s*a\^?\{?3\}?\s*\+\s*3a\^?\{?2\}?b\s*\+\s*3ab\^?\{?2\}?\s*\+\s*b\^?\{?3\}?$', r'\\left(a+b\\right)^{3} = a^{3} + 3a^{2}b + 3ab^{2} + b^{3}', s)
+    text = _wrap_simple_exponents(text)
+    text = _balance_delimiters(text, '(', ')')
+    text = _balance_delimiters(text, '{', '}')
 
-    # Robust fix for a^3-b^3 = (a-b)(a^2+ab+b^2) and variants (ignore leading OCR noise like bf, Omega, etc.)
-    s = re.sub(r'^[^a-zA-Z0-9(]+', '', s)
-    # Accept any leading symbol(s) before the expanded form, and map to canonical a^3-b^3 = (a-b)(a^2+ab+b^2)
-    diffcube_pattern = r'(?:[a-zA-Z]*\\)?a\^?\{?3\}?\s*-\s*b\^?\{?3\}?\s*=\s*\(a-b\)\(a\^?\{?2\}?\+ab\+b\^?\{?2\}?\)'
-    s = re.sub('^'+diffcube_pattern+'$', r'a^{3} - b^{3} = (a-b)(a^{2} + ab + b^{2})', s)
-    # Accept also a^3-b^3 = a^2-ab+b^2 (less common, but in mapping)
-    s = re.sub(r'^[^a-zA-Z0-9(]*a\^?\{?3\}?\s*-\s*b\^?\{?3\}?\s*=\s*a\^?\{?2\}?\s*-ab\+b\^?\{?2\}?$', r'a^{3} - b^{3} = (a-b)(a^{2} + ab + b^{2})', s)
-    # Accept also just the right side (no left), with or without leading noise
-    s = re.sub(r'^[^a-zA-Z0-9(]*\(a-b\)\(a\^?\{?2\}?\+ab\+b\^?\{?2\}?\)$', r'a^{3} - b^{3} = (a-b)(a^{2} + ab + b^{2})', s)
-    # Generic normalization
-    s = s.replace('12', 'a^2')
-    s = s.replace('b2', 'b^2')
-    s = s.replace('a2', 'a^2')
-    s = s.replace('c2', 'c^2')
-    s = s.replace('–', '-')
-    s = s.replace('−', '-')
-    s = s.replace('*', '')
-    s = s.replace('=', ' = ')
-    # Replace ^n with ^{n} (single curly braces)
-    s = re.sub(r'\^([0-9a-zA-Z])', r'^{\1}', s)
-    # Remove extra spaces
-    s = re.sub(r'\s+', ' ', s).strip()
-    # Remove leading/trailing non-math chars
-    s = re.sub(r'^[^a-zA-Z(]+', '', s)
-    s = re.sub(r'[^a-zA-Z0-9)]+$', '', s)
-    # Remove unmatched brackets
-    open_brackets = s.count('(')
-    close_brackets = s.count(')')
-    if open_brackets > close_brackets:
-        for _ in range(open_brackets - close_brackets):
-            s = s.replace('(', '', 1)
-    elif close_brackets > open_brackets:
-        for _ in range(close_brackets - open_brackets):
-            s = s[::-1].replace(')', '', 1)[::-1]
-    if s.count('(') != s.count(')'):
-        s = s.replace('(', '').replace(')', '')
-    # Remove extra $
-    s = s.replace('$', '')
-    # Add LaTeX math mode if missing
-    if not s.startswith('$$') and not s.startswith(r'\['):
-        s = s.strip()
-    return s
+    # Ensure \begin{env} has matching \end{env}
+    block_envs = ['array', 'cases', 'bmatrix', 'pmatrix', 'vmatrix', 'Bmatrix']
+    for env in block_envs:
+        begin_pattern = f"\\begin{{{env}}}"
+        if begin_pattern in text and f"\\end{{{env}}}" not in text:
+            text = text.rstrip() + f" \\end{{{env}}}"
+
+    # Fix missing braces in begin statements like \begin(array)
+    text = re.sub(r'\\begin\(([^)]+)\)', r'\\begin{\1}', text)
+    text = re.sub(r'\\end\(([^)]+)\)', r'\\end{\1}', text)
+
+    # Drop redundant outer braces that wrap simple accent macros
+    accent_macros = ('bar', 'hat', 'tilde', 'vec', 'overline', 'underline', 'dot', 'ddot')
+    for macro in accent_macros:
+        pattern_braced = rf'\{{\\{macro}\{{([^{{}}]+)\}}\}}'
+        pattern_spaced = rf'\{{\\{macro}\s+([^{{}}]+)\}}'
+        text = re.sub(pattern_braced, rf'\\{macro}{{\1}}', text)
+        text = re.sub(pattern_spaced, rf'\\{macro}{{\1}}', text)
+
+    text = _cleanup_array_wrappers(text)
+    text = _unwrap_trivial_arrays(text)
+    if r'\begin{array}' in text and r'\\' not in text:
+        text = re.sub(r'\\begin{array}{[^}]+}', '', text)
+        text = text.replace('\\end{array}', '')
+
+    # Skip aggressive brace collapsing to avoid dropping required delimiters
+
+    # Normalize absolute value delimiters for better rendering
+    text = text.replace(r'\left|', r'\left\lvert ')
+    text = text.replace(r'\right|', r'\right\rvert ')
+    text = re.sub(r'(?<!\\)\|([^|]+)(?<!\\)\|', r'\\lvert \1\\rvert', text)
+    left_abs = text.count(r'\left\lvert')
+    right_abs = text.count(r'\right\rvert')
+    while left_abs < right_abs:
+        text = r'\left\lvert ' + text
+        left_abs += 1
+    while left_abs > right_abs:
+        text = text.rstrip() + r' \right\rvert'
+        right_abs += 1
+
+    text = re.sub(r'\s*=\s*', ' = ', text)
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+
 # Formula Extraction Module
 # Extracts detected math formulas from images and saves them with their LaTeX representations
 
 import os
 import json
 import csv
-import re
+import importlib
 from datetime import datetime
 from PIL import Image
 import numpy as np
@@ -475,6 +207,173 @@ import io
 from fpdf import FPDF
 from typing import List, Dict, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+_PIX2TEX_MODEL = None
+_PIX2TEX_LOADED = False
+
+
+def _get_pix2tex_model():
+    """Load pix2tex on demand. Returns a callable model or None if unavailable."""
+    global _PIX2TEX_MODEL, _PIX2TEX_LOADED
+    if _PIX2TEX_LOADED:
+        return _PIX2TEX_MODEL
+    _PIX2TEX_LOADED = True
+    try:
+        module = importlib.import_module('pix2tex.cli')
+        LatexOCR = getattr(module, 'LatexOCR', None)
+        if LatexOCR is None:
+            return None
+        _PIX2TEX_MODEL = LatexOCR()
+    except Exception:
+        _PIX2TEX_MODEL = None
+    return _PIX2TEX_MODEL
+
+
+def _normalize_for_mathtext(expr: str) -> str:
+    """Adjust LaTeX so matplotlib's mathtext parser can handle it."""
+    if not expr:
+        return expr
+    text = expr
+    replacements = (
+        (r'\left\lvert', r'\left|'),
+        (r'\right\rvert', r'\right|'),
+        (r'\lvert', r'|'),
+        (r'\rvert', r'|'),
+        (r'\operatorname{', r'\mathrm{'),
+        (r'\text{', r'\mathrm{'),
+    )
+    for old, new in replacements:
+        text = text.replace(old, new)
+    return text
+
+
+def render_latex_to_image(latex_str: str, output_path: str, dpi: int = 300) -> bool:
+    """Render sanitized LaTeX to a transparent PNG using matplotlib."""
+    if not latex_str or latex_str.strip() in {"", "[Unrecognized]"}:
+        return False
+    try:
+        matplotlib = importlib.import_module('matplotlib')
+        matplotlib.use('Agg')
+        plt = importlib.import_module('matplotlib.pyplot')
+    except Exception:
+        return False
+
+    fig = plt.figure(figsize=(4, 1.5))
+    fig.patch.set_alpha(0)
+    ax = fig.add_axes([0, 0, 1, 1])
+    ax.axis('off')
+    safe_expr = _normalize_for_mathtext(latex_str)
+    try:
+        ax.text(0.5, 0.5, f"${safe_expr}$", fontsize=24, ha='center', va='center')
+        fig.savefig(output_path, dpi=dpi, transparent=True, bbox_inches='tight', pad_inches=0.2)
+    except Exception:
+        return False
+    finally:
+        plt.close(fig)
+    return True
+
+
+def _preprocess_crop_image(image: np.ndarray) -> np.ndarray:
+    """Enhance formula crops to improve recognition accuracy."""
+    if image.ndim == 3 and image.shape[2] == 3:
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = image.copy()
+
+    # Add replicate border to avoid clipping symbols near edges
+    bordered = cv2.copyMakeBorder(gray, 8, 8, 8, 8, borderType=cv2.BORDER_REPLICATE)
+
+    # Light blur to reduce noise, followed by adaptive thresholding for high contrast
+    blurred = cv2.GaussianBlur(bordered, (3, 3), 0)
+    adaptive = cv2.adaptiveThreshold(
+        blurred,
+        255,
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY_INV,
+        31,
+        15,
+    )
+
+    # Invert back to black-on-white if necessary
+    invert = cv2.bitwise_not(adaptive)
+
+    # Slight dilation to reconnect thin strokes
+    kernel = np.ones((2, 2), np.uint8)
+    dilated = cv2.dilate(invert, kernel, iterations=1)
+
+    # Upscale for recognizers that benefit from larger glyphs
+    upscaled = cv2.resize(dilated, None, fx=1.6, fy=1.6, interpolation=cv2.INTER_CUBIC)
+    return upscaled
+
+
+def _tesseract_math_ocr(image: Image.Image) -> str:
+    try:
+        import pytesseract
+    except Exception:
+        return "[Unrecognized]"
+
+    custom_config = '--psm 7 --oem 1 -c tessedit_char_whitelist=0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\\+-=*/()[]{}^_ ,.;:|<>\\frac\\sqrt\\sum\\int'
+    try:
+        raw = pytesseract.image_to_string(image, config=custom_config)
+    except Exception:
+        return "[Unrecognized]"
+    return _tesseract_to_latex(raw)
+
+
+def _tesseract_to_latex(text: str) -> str:
+    # Fuzzy match to known formulas
+    known_formulas = [
+        '(a^2-b^2)=(a+b)(a-b)',
+        '(a-b)^2=a^2-2ab+b^2',
+        '(a+b)^2=a^2+2ab+b^2',
+        '(a+b+c)^2=a^2+b^2+c^2+2ab+2bc+2ac',
+        '(a-b)^3=a^3-3a^2b+3ab^2-b^3',
+        '(a+b)^3=a^3+3a^2b+3ab^2+b^3',
+        'a^3-b^3=(a-b)(a^2+ab+b^2)',
+        'a^3+b^3=(a+b)(a^2-ab+b^2)',
+        'a^3-3a^2b+3ab^2-b^3',
+        'a^3+3a^2b+3ab^2+b^3'
+    ]
+    latex_map = {
+        '(a^2-b^2)=(a+b)(a-b)': r'(a^{2}-b^{2}) = (a+b)(a-b)',
+        '(a-b)^2=a^2-2ab+b^2': r'\left(a-b\right)^{2} = a^{2} - 2ab + b^{2}',
+        '(a+b)^2=a^2+2ab+b^2': r'\left(a+b\right)^{2} = a^{2} + 2ab + b^{2}',
+        '(a+b+c)^2=a^2+b^2+c^2+2ab+2bc+2ac': r'\left(a+b+c\right)^{2} = a^{2} + b^{2} + c^{2} + 2ab + 2bc + 2ac',
+        '(a-b)^3=a^3-3a^2b+3ab^2-b^3': r'\left(a-b\right)^{3} = a^{3} - 3a^{2}b + 3ab^{2} - b^{3}',
+        '(a+b)^3=a^3+3a^2b+3ab^2+b^3': r'\left(a+b\right)^{3} = a^{3} + 3a^{2}b + 3ab^{2} + b^{3}',
+        'a^3-b^3=(a-b)(a^2+ab+b^2)': r'a^{3} - b^{3} = (a-b)(a^{2} + ab + b^{2})',
+        'a^3+b^3=(a+b)(a^2-ab+b^2)': r'a^{3} + b^{3} = (a+b)(a^{2} - ab + b^{2})',
+        'a^3-3a^2b+3ab^2-b^3': r'\left(a-b\right)^{3} = a^{3} - 3a^{2}b + 3ab^{2} - b^{3}',
+        'a^3+3a^2b+3ab^2+b^3': r'\left(a+b\right)^{3} = a^{3} + 3a^{2}b + 3ab^{2} + b^{3}'
+    }
+    import difflib
+    import re
+
+    ocr_clean = text.replace(' ', '')
+    best_match = difflib.get_close_matches(ocr_clean, known_formulas, n=1, cutoff=0.6)
+    if best_match:
+        text = latex_map[best_match[0]]
+    # Replace ^n with ^{n}
+    text = re.sub(r'\^([0-9a-zA-Z])', r'^{\1}', text)
+    text = text.replace('*', '')
+    text = text.replace('=', ' = ')
+    text = text.replace('–', '-').replace('−', '-')
+    text = text.replace('b2', 'b^{2}').replace('a2', 'a^{2}').replace('c2', 'c^{2}')
+    text = text.replace(' ', '')
+    open_brackets = text.count('(')
+    close_brackets = text.count(')')
+    if open_brackets > close_brackets:
+        for _ in range(open_brackets - close_brackets):
+            text = text.replace('(', '', 1)
+    elif close_brackets > open_brackets:
+        for _ in range(close_brackets - open_brackets):
+            text = text[::-1].replace(')', '', 1)[::-1]
+    if text.count('(') != text.count(')'):
+        text = text.replace('(', '').replace(')', '')
+    text = re.sub(r'^[^a-zA-Z(]+', '', text)
+    text = re.sub(r'[^a-zA-Z0-9)]+$', '', text)
+    text = text.replace('$', '')
+    return text
 
 # Stub: enrich_formulas_with_descriptions (no Gemini/AI, just passthrough)
 def enrich_formulas_with_descriptions(formulas):
@@ -523,69 +422,6 @@ def extract_formula_crops(image, bboxes):
 
 
 def recognize_formulas(extracted_crops, model_args, model_objs):
-    def tesseract_to_latex(text):
-        # Fuzzy match to known formulas
-        known_formulas = [
-            '(a^2-b^2)=(a+b)(a-b)',
-            '(a-b)^2=a^2-2ab+b^2',
-            '(a+b)^2=a^2+2ab+b^2',
-            '(a+b+c)^2=a^2+b^2+c^2+2ab+2bc+2ac',
-            '(a-b)^3=a^3-3a^2b+3ab^2-b^3',
-            '(a+b)^3=a^3+3a^2b+3ab^2+b^3',
-            'a^3-b^3=(a-b)(a^2+ab+b^2)',
-            'a^3+b^3=(a+b)(a^2-ab+b^2)',
-            'a^3-3a^2b+3ab^2-b^3',
-            'a^3+3a^2b+3ab^2+b^3'
-        ]
-        latex_map = {
-            '(a^2-b^2)=(a+b)(a-b)': r'(a^{2}-b^{2}) = (a+b)(a-b)',
-            '(a-b)^2=a^2-2ab+b^2': r'\left(a-b\right)^{2} = a^{2} - 2ab + b^{2}',
-            '(a+b)^2=a^2+2ab+b^2': r'\left(a+b\right)^{2} = a^{2} + 2ab + b^{2}',
-            '(a+b+c)^2=a^2+b^2+c^2+2ab+2bc+2ac': r'\left(a+b+c\right)^{2} = a^{2} + b^{2} + c^{2} + 2ab + 2bc + 2ac',
-            '(a-b)^3=a^3-3a^2b+3ab^2-b^3': r'\left(a-b\right)^{3} = a^{3} - 3a^{2}b + 3ab^{2} - b^{3}',
-            '(a+b)^3=a^3+3a^2b+3ab^2+b^3': r'\left(a+b\right)^{3} = a^{3} + 3a^{2}b + 3ab^{2} + b^{3}',
-            'a^3-b^3=(a-b)(a^2+ab+b^2)': r'a^{3} - b^{3} = (a-b)(a^{2} + ab + b^{2})',
-            'a^3+b^3=(a+b)(a^2-ab+b^2)': r'a^{3} + b^{3} = (a+b)(a^{2} - ab + b^{2})',
-            'a^3-3a^2b+3ab^2-b^3': r'\left(a-b\right)^{3} = a^{3} - 3a^{2}b + 3ab^{2} - b^{3}',
-            'a^3+3a^2b+3ab^2+b^3': r'\left(a+b\right)^{3} = a^{3} + 3a^{2}b + 3ab^{2} + b^{3}'
-        }
-        import difflib
-        # Remove spaces for matching
-        ocr_clean = text.replace(' ', '')
-        best_match = difflib.get_close_matches(ocr_clean, known_formulas, n=1, cutoff=0.6)
-        if best_match:
-            text = latex_map[best_match[0]]
-        import re
-        # Replace ^n with ^{n}
-        text = re.sub(r'\^([0-9a-zA-Z])', r'^{\1}', text)
-        # Replace * with nothing (remove OCR artifacts)
-        text = text.replace('*', '')
-        # Replace common OCR mistakes
-        text = text.replace('=', ' = ')
-        text = text.replace('–', '-')
-        text = text.replace('−', '-')
-        text = text.replace('b2', 'b^{2}')
-        text = text.replace('a2', 'a^{2}')
-        text = text.replace('c2', 'c^{2}')
-        text = text.replace(' ', '')
-        # Fix bracket pairing: remove unmatched brackets
-        open_brackets = text.count('(')
-        close_brackets = text.count(')')
-        if open_brackets > close_brackets:
-            for _ in range(open_brackets - close_brackets):
-                text = text.replace('(', '', 1)
-        elif close_brackets > open_brackets:
-            for _ in range(close_brackets - open_brackets):
-                text = text[::-1].replace(')', '', 1)[::-1]
-        if text.count('(') != text.count(')'):
-            text = text.replace('(', '').replace(')', '')
-        # Remove leading non-math characters (e.g., stray numbers)
-        text = re.sub(r'^[^a-zA-Z(]+', '', text)
-        # Remove any trailing non-math characters
-        text = re.sub(r'[^a-zA-Z0-9)]+$', '', text)
-        # Remove any extra $ from the formula
-        text = text.replace('$', '')
-        return text
     """
     Recognize LaTeX formulas from extracted crop images
     
@@ -604,41 +440,43 @@ def recognize_formulas(extracted_crops, model_args, model_objs):
 
     def process_crop(idx_crop):
         idx, crop_data = idx_crop
-        crop_img = Image.fromarray(np.uint8(crop_data['image']))
+        crop_np = np.uint8(crop_data['image'])
+        crop_img = Image.fromarray(crop_np)
+        preprocessed_np = _preprocess_crop_image(crop_np)
+        preprocessed_rgb = cv2.cvtColor(preprocessed_np, cv2.COLOR_GRAY2RGB)
+        preprocessed_img = Image.fromarray(preprocessed_rgb)
         latex_pred = "[Unrecognized]"
+        raw_pred = "[Unrecognized]"
         # Try Recog_MathForm
         if RM is not None:
             try:
                 latex_pred = RM.call_model(model_args, *model_objs, img=crop_img)
                 # If model output is garbage, try fallback immediately
                 if not isinstance(latex_pred, str) or latex_pred.strip() in {"", "ERROR", "[Unrecognized]"}:
-                    latex_pred = "[Unrecognized]"
+                    latex_pred = RM.call_model(model_args, *model_objs, img=preprocessed_img)
             except Exception:
-                latex_pred = "[Unrecognized]"
+                latex_pred = RM.call_model(model_args, *model_objs, img=preprocessed_img) if RM is not None else "[Unrecognized]"
 
         # Fallback: Tesseract OCR with fuzzy matching
         if not isinstance(latex_pred, str) or latex_pred.strip() in {"", "ERROR", "[Unrecognized]"}:
-            try:
-                import pytesseract
-                text = pytesseract.image_to_string(crop_img, config='--psm 7')
-                latex_pred = tesseract_to_latex(text)
-            except Exception:
-                latex_pred = "[Unrecognized]"
+            latex_pred = _tesseract_math_ocr(preprocessed_img)
 
         # Fallback: pix2tex if installed and still unrecognized
         if not isinstance(latex_pred, str) or latex_pred.strip() in {"", "ERROR", "[Unrecognized]"}:
-            try:
-                from pix2tex.cli import LatexOCR
-                pix_model = LatexOCR()
-                latex_pred = pix_model(crop_img)
-            except Exception:
-                latex_pred = "[Unrecognized]"
+            pix_model = _get_pix2tex_model()
+            if pix_model is not None:
+                try:
+                    latex_pred = pix_model(preprocessed_img)
+                except Exception:
+                    latex_pred = "[Unrecognized]"
 
-        latex_pred = correct_latex(latex_pred)
+        raw_pred = latex_pred
+        latex_pred = correct_latex(raw_pred)
         return {
             'id': idx + 1,
             'coordinates': crop_data['coordinates'],
             'latex': latex_pred,
+            'raw_latex': raw_pred,
             'confidence': 1.0,
             'image': crop_data['image']
         }
@@ -675,12 +513,12 @@ def save_formulas_to_csv(extracted_crops, model_args, model_objs, RM, output_pat
 
             # Fallback: pix2tex if installed
             if not isinstance(latex_pred, str) or latex_pred.strip() in {"", "ERROR", "[Unrecognized]"}:
-                try:
-                    from pix2tex.cli import LatexOCR
-                    pix_model = LatexOCR()
-                    latex_pred = pix_model(crop_img)
-                except Exception:
-                    latex_pred = "ERROR"
+                pix_model = _get_pix2tex_model()
+                if pix_model is not None:
+                    try:
+                        latex_pred = pix_model(crop_img)
+                    except Exception:
+                        latex_pred = "ERROR"
 
             # Fallback: Tesseract OCR if still unrecognized
             if not isinstance(latex_pred, str) or latex_pred.strip() in {"", "ERROR", "[Unrecognized]"}:

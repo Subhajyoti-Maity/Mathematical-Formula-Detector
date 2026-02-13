@@ -11,6 +11,8 @@ import os
 import zipfile
 import io
 import re
+import json
+import csv
 import pytesseract
 
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
@@ -42,32 +44,47 @@ def is_overlapping(box1, box2):
     return iou
 
 def filter_formula_boxes(formula_boxes, text_boxes):
-    # Remove only the box overlapping with the heading 'Algebraic Formulas' using Tesseract
+    # Remove only boxes that confidently match textual headings; keep inline formulas intact.
     filtered = []
     min_area = 800  # Minimum area to consider as formula (tune as needed)
-    try:
-        img_height = st.session_state['uploaded_image'].shape[0]
-    except Exception:
-        img_height = 0
-    top_margin = int(img_height * 0.30) if img_height else 0
+    img = st.session_state.get('opencv_image')
+    img_height = int(img.shape[0]) if isinstance(img, np.ndarray) else 0
+    top_margin = int(img_height * 0.20) if img_height else 0
     heading_boxes = []
+
+    def looks_like_heading(text: str, y_top: int) -> bool:
+        if not text:
+            return False
+        stripped = text.strip()
+        if len(stripped) < 4:
+            return False
+        # Reject anything that already contains obvious math symbols.
+        if any(ch in "=+−-*/^_|()[]{}\\" for ch in stripped):
+            return False
+        alpha = sum(c.isalpha() for c in stripped)
+        if alpha / max(len(stripped), 1) < 0.8:
+            return False
+        words = stripped.split()
+        # Long headings or known keywords are safe to treat as non-formula text.
+        keywords = {"chapter", "section", "exercise", "example", "formula", "formulas"}
+        keyword_hit = any(word.lower() in keywords for word in words)
+        if y_top <= top_margin or keyword_hit:
+            return True
+        # Single long uppercase word is very likely a title.
+        if len(words) == 1 and words[0].isupper() and len(words[0]) >= 4:
+            return True
+        return False
+
     for fbox in formula_boxes:
         x1, y1, x2, y2 = fbox[:4]
         area = (x2 - x1) * (y2 - y1)
         is_heading = False
-        # Exclude if in top 30% of image
-        if y1 < top_margin:
-            is_heading = True
-        # Exclude if overlaps with a mostly-alphabetic OCR text box (heading), anywhere in image
-        if not is_heading:
-            for tbox, text in text_boxes:
-                if not text:
-                    continue
-                alpha_text = ''.join(c for c in text if c.isalpha())
-                if len(alpha_text) > 0 and len(alpha_text) / max(len(text),1) > 0.7:
-                    if is_overlapping(fbox[:4], tbox) > 0.3:
-                        is_heading = True
-                        break
+        for tbox, text in text_boxes:
+            if not text:
+                continue
+            if is_overlapping(fbox[:4], tbox) > 0.4 and looks_like_heading(text, tbox[1]):
+                is_heading = True
+                break
         if is_heading and area > min_area:
             heading_boxes.append(fbox)
         elif not is_heading and area > min_area:
@@ -132,6 +149,11 @@ def _normalize_latex_for_katex(s: str) -> str:
     t = re.sub(r"\\sim([A-Za-z])", r"\\tilde{\\\1}", t)
     # stackrel -> overset (KaTeX supports both; overset is often safer)
     t = t.replace("\\stackrel", "\\overset")
+    # Absolute value variants not supported uniformly across renderers
+    t = t.replace("\\left\\lvert", "\\left|")
+    t = t.replace("\\right\\rvert", "\\right|")
+    t = t.replace("\\lvert", "|")
+    t = t.replace("\\rvert", "|")
     # Minor whitespace cleanup
     t = re.sub(r"\s+", " ", t).strip()
     return t
@@ -141,13 +163,19 @@ def render_latex_block(latex_text):
     if latex_text is None or str(latex_text).strip() == "":
         st.info("No LaTeX available for this formula.")
         return
-    normalized = _normalize_latex_for_katex(str(latex_text))
+    sanitized = FE.correct_latex(str(latex_text))
+    if not sanitized or sanitized == "[Unrecognized]":
+        st.info("Formula could not be recognized from the image.")
+        raw_display = str(latex_text).strip() or "[Unrecognized]"
+        st.code(raw_display, language='text')
+        return
+    normalized = _normalize_latex_for_katex(sanitized)
     try:
         # st.latex centers the formula and avoids overflowing raw text blocks
         st.latex(normalized)
     except Exception:
         st.warning("Could not render LaTeX; showing raw text instead.")
-        st.code(normalized, language='latex')
+        st.code(sanitized, language='latex')
 
 if __name__ == '__main__':
     st.set_page_config(page_title="Math Formula Detection", page_icon="➗", layout="wide")
@@ -301,10 +329,52 @@ if __name__ == '__main__':
                                     
                                     # Save individual formula images
                                     formula_dir = os.path.join(output_dir, 'formula_images')
+                                    rendered_dir = os.path.join(output_dir, 'rendered_formulas')
                                     os.makedirs(formula_dir, exist_ok=True)
-                                    for idx, crop_data in enumerate(extracted_crops):
-                                        img_path = os.path.join(formula_dir, f'formula_{idx+1:04d}.png')
+                                    os.makedirs(rendered_dir, exist_ok=True)
+                                    metadata_rows = []
+                                    render_failures = 0
+                                    for crop_data, formula in zip(extracted_crops, formulas):
+                                        filename = f'formula_{formula["id"]:04d}.png'
+                                        img_path = os.path.join(formula_dir, filename)
                                         cv2.imwrite(img_path, crop_data['image'])
+                                        rendered_name = f'formula_{formula["id"]:04d}_rendered.png'
+                                        rendered_path = os.path.join(rendered_dir, rendered_name)
+                                        rendered_rel = os.path.join('rendered_formulas', rendered_name)
+                                        rendered_ok = FE.render_latex_to_image(formula['latex'], rendered_path)
+                                        if not rendered_ok:
+                                            rendered_rel = ''
+                                            render_failures += 1
+                                        image_rel = os.path.join('formula_images', filename).replace('\\', '/')
+                                        rendered_rel = rendered_rel.replace('\\', '/') if rendered_rel else ''
+                                        metadata_rows.append({
+                                            'id': formula['id'],
+                                            'image': image_rel,
+                                            'latex': formula['latex'],
+                                            'raw_latex': formula.get('raw_latex', ''),
+                                            'rendered_image': rendered_rel,
+                                            'render_success': rendered_ok,
+                                            'coordinates': formula['coordinates'],
+                                            'confidence': formula['confidence']
+                                        })
+
+                                    # Save metadata in JSON and CSV for easy pairing with crops
+                                    metadata_json_path = os.path.join(output_dir, 'formulas_metadata.json')
+                                    with open(metadata_json_path, 'w', encoding='utf-8') as meta_json:
+                                        json.dump(metadata_rows, meta_json, ensure_ascii=False, indent=2)
+
+                                    metadata_csv_path = os.path.join(output_dir, 'formulas_metadata.csv')
+                                    fieldnames = ['id', 'image', 'rendered_image', 'render_success', 'latex', 'raw_latex', 'coordinates', 'confidence']
+                                    with open(metadata_csv_path, 'w', newline='', encoding='utf-8') as meta_csv:
+                                        writer = csv.DictWriter(meta_csv, fieldnames=fieldnames)
+                                        writer.writeheader()
+                                        for row in metadata_rows:
+                                            serializable = row.copy()
+                                            serializable['coordinates'] = ','.join(str(coord) for coord in row['coordinates'])
+                                            writer.writerow(serializable)
+
+                                    if render_failures and render_failures == len(metadata_rows):
+                                        st.warning("Could not render LaTeX to images; ensure matplotlib is installed for PNG exports.")
                                     
                                     # Create ZIP package
                                     zip_path = os.path.join(output_dir, 'extracted_formulas.zip')
@@ -370,6 +440,10 @@ if __name__ == '__main__':
                                             with col_latex:
                                                 st.write("**LaTeX Formula:**")
                                                 st.code(formula['latex'], language='latex')
+                                                raw_latex = formula.get('raw_latex')
+                                                if raw_latex and raw_latex != formula['latex']:
+                                                    st.write("**Model Output (raw):**")
+                                                    st.code(raw_latex, language='latex')
                                                 st.write("**Rendered:**")
                                                 render_latex_block(formula['latex'])
                                                 st.write(f"**Bounding Box:** {formula['coordinates']}")

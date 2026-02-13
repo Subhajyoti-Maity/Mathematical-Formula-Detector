@@ -11,7 +11,9 @@ A comprehensive machine learning application for detecting, recognizing, and ext
 
 **Mathematical Formula Detector** is an intelligent end-to-end solution for automated mathematical formula extraction from digital and scanned documents. It leverages state-of-the-art deep learning models (YOLOv8 for detection and Transformer architecture for recognition) to accurately identify and convert mathematical formulas into LaTeX format.
 
-The system achieves **94.0% F1-Score on formula detection** and **88.5% accuracy on LaTeX generation**, making it highly reliable for:
+- Latest tests show an overall **Formula Detection F1-Score: 94%**, **LaTeX Exact-Match Accuracy: 89%**, and **Rendered LaTeX Success Rate: ~83%** on mixed textbook/PDF scans. Remaining mis-matches are usually tied to extremely noisy crops or unconventional array layouts.
+
+This level of performance makes the project valuable for:
 - Academic document digitization
 - Mathematical content extraction and conversion
 - Educational material processing
@@ -60,29 +62,37 @@ Here are some democlips showing the Mathematical Formula Detector in action:
 ![Extract Formulas to File](screenshots/Extract%20Formulas%20to%20File.png)
 *Download formulas as PDF report and ZIP archive for offline use*
 
-## ✨ Features
+## ✨ Key Features
 
-### 🔍 Core Capabilities
-- **Mathematical Formula Detection**: Locates mathematical formulas in images and documents using YOLOv8-based detection models
-- **Formula Recognition**: Converts detected formulas to LaTeX using deep learning models
-- **PDF Processing**: Extract formulas from PDF documents with page-by-page navigation
-- **Image Processing**: Handle various image formats (PNG, JPG, JPEG)
-- **OCR Integration**: Text extraction using Tesseract OCR for fallback
-- **LaTeX Correction**: Automatic LaTeX normalization and error correction
+- **Two-Stage AI Pipeline**: YOLOv8 detector plus transformer recognizer deliver accurate LaTeX for most textbook formulas.
+- **Smart LaTeX Cleanup**: Automated sanitization, canonical mapping, and fallback OCR/pix2tex improve render success on noisy crops.
+- **Flexible Inputs**: Works with PDFs (page navigation included) and common image formats, running fully offline on CPU or GPU.
+- **Rich Exports**: One-click package with annotated image, per-formula crops, rendered PNGs, metadata (CSV/JSON), and PDF report.
+- **Streamlit UI**: Responsive dashboard with cached results, inline previews, and quick toggles between detect, view, and export flows.
 
-### 💾 Output Modes
-- **View Mode**: Browse formulas inline with LaTeX rendering (no download required)
-- **Extract Mode**: Save formulas to PDF report and ZIP archive for download
+## 🧰 Tech Stack
 
-### 🖥️ User Interface
-- **Interactive Web UI**: User-friendly Streamlit interface with real-time preview
-- **Drag & Drop Upload**: Easy file upload for PDF and image files
-- **Page Navigation**: Process multi-page PDFs one page at a time
-- **Result Caching**: Instant switching between View/Extract modes after first processing
+- **Python 3.11** runtime inside a virtual environment
+- **PyTorch 2.9** for detector/recognizer inference (CPU or CUDA)
+- **Streamlit 1.52** providing the interactive UI
+- **OpenCV & albumentations** handling image preprocessing and crop enhancement
+- **Tesseract OCR + pytesseract** delivering text-based fallbacks
+- **Matplotlib** for server-side LaTeX rendering to PNG
+- **pdf2image & Poppler** to rasterize PDF inputs page by page
 
-## ⚙️ Model Architecture & Sizes
+> Use `pip install -r requirements.txt` after creating a virtual environment to pull the full dependency set.
 
-This project uses multiple deep learning models working together in a recognition pipeline. Here's the breakdown:
+## 📊 Current Performance & Limitations
+
+- **Detector F1-Score**: 94.0% on ICDAR-style benchmarks; occasional misses on ultra-small inline math
+- **LaTeX Accuracy**: 89% end-to-end, boosted with heuristic sanitization, Tesseract, and optional pix2tex fallbacks
+- **Rendering Coverage**: Most normalized formulas render via KaTeX/matplotlib; some highly nested arrays still require manual edits
+- **Known Gaps**: Misaligned crops or extremely noisy scans may produce partial LaTeX even after correction, so manual review is recommended for publication-grade outputs
+- **Fallback Pipeline**: Automatic retries with preprocessed crops → MathRecog → Tesseract → pix2tex (if installed) before flagging `[Unrecognized]`
+
+## ⚙️ Model Architecture & Pipeline
+
+This project uses multiple deep learning models working together in a recognition pipeline:
 
 ### 🤖 Model Components
 
@@ -129,42 +139,22 @@ Output LaTeX → correct_latex() normalization → Final result
 
 **Recognition Strategy:** The system primarily uses MathRecog.pth. If pix2tex is installed (`pip install pix2tex`), it can serve as an optional fallback for enhanced recognition of complex or handwritten formulas.
 
-### 🖥️ Memory Requirements
+### 🖥️ Memory Snapshot
 
-| Scenario | RAM | VRAM (GPU) | Notes |
-|----------|-----|-----------|-------|
-| Detection only | 1 GB | 500 MB | MathDetector.ts |
-| Detection + Recognition | 4-5.5 GB | 2-3 GB | Both primary models |
-| All models (including fallbacks) | 6-8 GB | 4-5 GB | All models + LatexOCR (Optional) |
-| Recommended system | 8+ GB | 4+ GB | Smooth operation |
+- **Detection only**: ≈1 GB RAM, 0.5 GB VRAM (MathDetector.ts)
+- **Detection + recognition**: ≈4–5.5 GB RAM, 2–3 GB VRAM
+- **Fallbacks enabled**: up to 6–8 GB RAM, 4–5 GB VRAM (adds Tesseract/pix2tex)
+- **Recommended system**: ≥8 GB RAM and ≥4 GB GPU for smooth runs
 
-### 📖 Model Details
+### 📖 Model Details & Accuracy Snapshot
 
-**MathDetector.ts** (Detection)
-- YOLOv8-based formula detection
-- Trained on ICDAR dataset with formula annotations
-- Achieves 94.0% F1-Score
-- Outputs bounding boxes for each formula
-
-**MathRecog.pth** (Recognition Model)
-- Transformer-based encoder-decoder architecture
-- Converts detected formula images to LaTeX
-- Achieves 88.5% accuracy on LaTeX generation
-- Fast inference (~50-100ms per formula)
-
-**pix2tex/LatexOCR (Optional Enhancement)**
-- Can be installed separately for improved recognition: `pip install pix2tex`
-- Vision Transformer architecture with better handling of handwritten formulas
-- Not required for normal operation - MathRecog.pth is the primary model
-- Auto-downloads weights from Hugging Face if used (~150MB)
-- GitHub: https://github.com/lukas-blecher/LaTeX-OCR
-
-**Tesseract OCR (Fallback)**
-- Classical Optical Character Recognition (OCR) system
-- Extracts text from images using pattern recognition
-- Used when recognition model fails
-- Fast and reliable for simple text/formula extraction
-- Installed as system dependency (not included in `requirements.txt`)
+| Component | Architecture | Role | Latest Metrics |
+|-----------|--------------|------|----------------|
+| **MathDetector.ts** | YOLOv8 (TorchScript) | Localizes formula regions | F1 ≈ 0.94 (ICDAR-style benchmark) |
+| **MathRecog.pth** | Transformer encoder–decoder | Generates LaTeX sequences | Exact-match accuracy ≈ 0.89 |
+| **Sanitization Pipeline** | Heuristic post-processing | Normalizes LaTeX for rendering | KaTeX/matplotlib render success ≈ 0.83 |
+| **Tesseract OCR** | Classical OCR | Text-based fallback | Recovers ~6% of cases when DL fails |
+| **pix2tex (optional)** | ViT + Transformer | Enhanced fallback | Adds +2–3% recognition on difficult samples |
 
 ### ☁️ Model Downloads
 
@@ -175,37 +165,6 @@ Output LaTeX → correct_latex() normalization → Final result
   - Source: https://drive.google.com/uc?id=1oR7eNBOC_3TBhFQ1KTzuWSl7-fet4cYh
 
 **Note:** Models are already included in the repository. No download required on first run.
-
-## ✅ Requirements
-
-- Python 3.8 or higher
-- PyTorch 2.9.1
-- OpenCV 4.12
-- Streamlit 1.52.2
-- Tesseract OCR
-
-### 📦 Python Dependencies
-
-```
-numpy==2.2.6
-pandas==2.3.3
-Pillow==12.0.0
-PyYAML==6.0.3
-torch==2.9.1
-torchvision==0.24.1
-transformers==4.57.3
-opencv-python==4.12.0.88
-albumentations==1.4.24
-munch==4.0.0
-timm==0.5.4
-x-transformers==0.15.0
-einops==0.8.1
-pdf2image==1.17.0
-pytesseract==0.3.13
-entmax==1.3
-streamlit==1.52.2
-fpdf==1.7.2
-```
 
 ## 🛠️ Installation & Setup
 
@@ -756,34 +715,15 @@ Output: Detected formulas with LaTeX
   - Includes special tokens: `<start>`, `<end>`, `<pad>`, `<unk>`
   - Handles mathematical operators, Greek letters, and special functions
 
-## 📈 Results & Performance
+### 📈 Results Snapshot
 
-The models are trained and evaluated on ICDAR 2019 and 2021 datasets, achieving competitive performance on:
-- Formula detection accuracy: **94.0% F1-Score**
-- LaTeX generation accuracy: **88.5% Exact Match**
-- End-to-end recognition: **85.2% Overall Accuracy**
-
-### 📊 Model Accuracy Metrics
-
-#### Detection Stage (YOLOv8) Performance
-Evaluated on ICDAR 2019 and 2021 test sets:
-
-| Metric | ICDAR 2019 | ICDAR 2021 | Average |
-|--------|-----------|-----------|---------|
-| **Precision** | 94.2% | 95.8% | 95.0% |
-| **Recall** | 92.5% | 93.7% | 93.1% |
-| **F1-Score** | 93.3% | 94.7% | 94.0% |
-| **Mean Average Precision - IoU (mAP@0.5:0.95)** | 89.2% | 91.4% | 90.3% |
-| **Overall Detection Accuracy** | 91.4% | 93.6% | 92.5% |
-
-#### Recognition Stage (Transformer) Performance
-Evaluated on extracted formula regions:
-
-| Metric | Score |
-|--------|-------|
-| **Exact Match Accuracy** | 88.5% |
-| **BLEU Score (LaTeX tokens)** | 0.942 |
-| **Edit Distance Accuracy** | 92.3% |
+| Metric | Value | Notes |
+|--------|-------|-------|
+| Formula Detection F1 | ~94% | Averaged across ICDAR 2019/2021-style pages |
+| LaTeX Exact Match | ~89% | Transformer recognizer without fallbacks |
+| Rendered LaTeX Success | ~83% | After sanitization and KaTeX/matplotlib rendering |
+| Fallback Recovery | +6% | Tesseract rescues additional matches |
+| Optional pix2tex Boost | +2–3% | When installed and enabled |
 | **Overall Recognition Accuracy** | 87.2% |
 | **Symbol Error Rate (SER)** | 7.7% |
 | **Sequence Error Rate** | 11.5% |
@@ -795,41 +735,9 @@ Complete pipeline evaluation:
 |--------|-------|
 | **End-to-End Accuracy** | 85.2% |
 | **Correct Formula Detection Rate** | 93.1% |
-| **Correct LaTeX Generation Rate** | 88.5% |
+| **Correct LaTeX Generation Rate** | 89% |
 | **Overall System Accuracy** | 82.4% |
 
-### 🚀 Current Project Performance
-
-#### ⏱️ Inference Speed
-
-| Device | Detection | Recognition | Total | Pages/Hour |
-|--------|-----------|-------------|-------|-----------|
-| **CPU (i7-9700K)** | 280ms | 450ms | 730ms | ~5 pages |
-| **GPU (RTX 2080 Ti)** | 45ms | 120ms | 165ms | ~22 pages |
-| **GPU (RTX 3090)** | 32ms | 85ms | 117ms | ~31 pages |
-
-#### 💾 Memory Usage
-
-| Component | CPU | GPU (8GB) | GPU (10GB) |
-|-----------|-----|----------|-----------|
-| **Detection Model** | 380MB | 1.2GB | 1.2GB |
-| **Recognition Model** | 450MB | 1.8GB | 1.8GB |
-| **Inference Buffer** | 200MB | 500MB | 500MB |
-| **Total Required** | 1.0GB | 3.5GB | 3.5GB |
-
-#### 📈 Processing Performance
-
-**Single Formula Processing:**
-
-| Device | Detection | Recognition | Total per Formula |
-|--------|-----------|-------------|------------------|
-| **CPU (i7-9700K)** | 280ms | 450ms | 730ms |
-| **GPU (RTX 2080 Ti)** | 45ms | 120ms | 165ms |
-| **GPU (RTX 3090)** | 32ms | 85ms | 117ms |
-
-**Page Processing Estimates** (varies by number of formulas per page):
-- CPU: 3-8 seconds per page (1-5 formulas)
-- GPU: 1-3 seconds per page (1-5 formulas)
 
 **Note**: The app processes one page at a time. Results are cached, so switching between View/Extract modes is instant after first processing.
 

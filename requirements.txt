@@ -15,4 +15,5 @@ pdf2image==1.17.0
 pytesseract==0.3.13
 entmax==1.3
 fpdf==1.7.2
+matplotlib==3.9.2
 streamlit==1.52.2
